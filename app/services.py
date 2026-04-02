@@ -15,11 +15,12 @@ from app.models import ConversionLog, ConversionError
 from app.utils import archive_path, output_path, SOURCE_LABELS
 from converters import detector
 
-BASE_DIR             = Path(__file__).resolve().parent.parent
-REFERENCE_CSV        = BASE_DIR / "reference" / "品號資料.csv"
-A1LEAGE_REFERENCE_CSV = BASE_DIR / "A1樂齡官網" / "品號資料.csv"
-OUTPUT_DIR           = BASE_DIR / "output"
-ARCHIVE_DIR          = BASE_DIR / "archive"
+BASE_DIR               = Path(__file__).resolve().parent.parent
+REFERENCE_CSV          = BASE_DIR / "reference" / "品號資料.csv"
+A1LEAGE_REFERENCE_CSV  = BASE_DIR / "A1樂齡官網" / "品號資料.csv"
+JJOFFICIAL_REFERENCE_CSV = BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv"
+OUTPUT_DIR             = BASE_DIR / "output"
+ARCHIVE_DIR            = BASE_DIR / "archive"
 
 
 # ── 資料夾掃描 ────────────────────────────────────────────────────────────
@@ -100,16 +101,20 @@ def run_conversion(folder: str, operator: str,
     5. 寫入 DB
     回傳 ConversionLog
     """
-    from converters.shopee  import ShopeeConverter
-    from converters.a1baby  import A1BabyConverter
-    from converters.leage   import LeageConverter
-    from converters.a1leage import A1LeageConverter
+    from converters.shopee      import ShopeeConverter
+    from converters.a1baby      import A1BabyConverter
+    from converters.leage       import LeageConverter
+    from converters.a1leage     import A1LeageConverter
+    from converters.jjofficial  import JJOfficialConverter
+    from converters.yodee       import YodeeConverter
 
     CONVERTER_MAP = {
-        "shopee":  ShopeeConverter,
-        "a1baby":  A1BabyConverter,
-        "leage":   LeageConverter,
-        "a1leage": A1LeageConverter,
+        "shopee":     ShopeeConverter,
+        "a1baby":     A1BabyConverter,
+        "leage":      LeageConverter,
+        "a1leage":    A1LeageConverter,
+        "jjofficial": JJOfficialConverter,
+        "yodee":      YodeeConverter,
     }
 
     folder_path = Path(folder)
@@ -135,8 +140,13 @@ def run_conversion(folder: str, operator: str,
     if not source_type:
         raise ValueError("無法自動判斷訂單來源，請手動指定")
 
-    # 執行轉換（a1leage 使用獨立的品號資料）
-    ref_csv   = A1LEAGE_REFERENCE_CSV if source_type == "a1leage" else REFERENCE_CSV
+    # 執行轉換（各通路使用對應的品號資料）
+    YODEE_REFERENCE_CSV = BASE_DIR / "優迪通路" / "品號資料.csv"
+    ref_csv = {
+        "a1leage":    A1LEAGE_REFERENCE_CSV,
+        "jjofficial": JJOFFICIAL_REFERENCE_CSV,
+        "yodee":      YODEE_REFERENCE_CSV,
+    }.get(source_type, REFERENCE_CSV)
     converter = CONVERTER_MAP[source_type](ref_csv, OUTPUT_DIR)
     result    = converter.convert(pending)
 

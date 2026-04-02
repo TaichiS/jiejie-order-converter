@@ -4,17 +4,21 @@ from datetime import datetime
 
 
 SOURCE_LABELS = {
-    "shopee":  "蝦皮",
-    "a1baby":  "A1婦幼展",
-    "leage":   "樂齡網",
-    "a1leage": "A1樂齡官網",
+    "shopee":     "蝦皮",
+    "a1baby":     "A1婦幼展",
+    "leage":      "樂齡網",
+    "a1leage":    "A1樂齡官網",
+    "jjofficial": "捷捷官網",
+    "yodee":      "優迪通路",
 }
 
 SOURCE_COLORS = {
-    "shopee":  "warning",
-    "a1baby":  "info",
-    "leage":   "success",
-    "a1leage": "danger",
+    "shopee":     "warning",
+    "a1baby":     "info",
+    "leage":      "success",
+    "a1leage":    "danger",
+    "jjofficial": "primary",
+    "yodee":      "secondary",
 }
 
 

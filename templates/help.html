@@ -12,7 +12,7 @@
         </svg>
         使用說明
       </h5>
-      <p class="text-muted small mb-0">目前支援以下 4 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
+      <p class="text-muted small mb-0">目前支援以下 6 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
     </div>
 
     <!-- 蝦皮 -->
@@ -76,6 +76,41 @@
           <tr><td class="text-muted">品號資料</td><td>使用獨立的 <code>A1樂齡官網/品號資料.csv</code>（與其他來源分開）</td></tr>
           <tr><td class="text-muted">貨到付款</td><td>自動新增手續費品項（F59900003，$30），並計算代收金額</td></tr>
           <tr><td class="text-muted">輸出檔案</td><td>MMDD.xlsx（Sheet1）＋ MMDD黑貓.csv</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 捷捷官網 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-jjofficial px-3 py-1" style="font-size:.85rem">捷捷官網</span>
+        <h6 class="fw-bold mb-0">捷捷寶寶粥官網訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>後台匯出的 <code>.xlsx</code> 檔</td></tr>
+          <tr><td class="text-muted">工作表名稱</td><td><code>Sales</code></td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>含「全家服務編號 / 7-11 店號」與「加購品類型」欄位</td></tr>
+          <tr><td class="text-muted">品號資料</td><td>使用獨立的 <code>捷捷寶寶粥官網/品號資料.csv</code> 與 <code>加購品.csv</code></td></tr>
+          <tr><td class="text-muted">分拆邏輯</td><td>全家服務編號有值 → 全家超商；空白 → 黑貓宅配</td></tr>
+          <tr><td class="text-muted">運費處理</td><td>輸入欄有運費時，自動在訂單末尾補 F59900001 運費列</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD黑貓.xlsx ＋ MMDD全家.xlsx ＋ MMDD黑貓托運單.csv</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 優迪通路 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-yodee px-3 py-1" style="font-size:.85rem">優迪通路</span>
+        <h6 class="fw-bold mb-0">優迪通路（Yodee）訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>後台匯出的 <code>.xlsx</code> 檔，工作表以日期命名（如 <code>2026-01-26</code>）</td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>工作表標頭第一欄為「訂單編號」，含「產品名稱」欄</td></tr>
+          <tr><td class="text-muted">格式規格</td><td>新細明體 12pt；欄寬 A:13.875 / B:9.75 / C:26.125 / D:14.25 / E:11.0 / F:28.125</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD.xlsx（工作表以日期命名）</td></tr>
         </tbody>
       </table>
     </div>

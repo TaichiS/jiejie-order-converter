@@ -202,6 +202,24 @@ body {
   padding: 0.2rem 0.6rem;
   border-radius: 20px;
 }
+.badge-jjofficial {
+  background: rgba(59, 130, 246, 0.15);
+  color: #1e40af;
+  border: 1px solid rgba(59, 130, 246, 0.30);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
+.badge-yodee {
+  background: rgba(107, 114, 128, 0.13);
+  color: #374151;
+  border: 1px solid rgba(107, 114, 128, 0.28);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
 .badge-unknown {
   background: rgba(156, 163, 175, 0.18);
   color: #374151;

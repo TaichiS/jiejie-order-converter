@@ -29,6 +29,10 @@ def detect_each(files: list[Path]) -> dict[Path, str | None]:
             result[f] = "shopee"
         elif _confirm_a1leage(f):
             result[f] = "a1leage"
+        elif _confirm_jjofficial(f):
+            result[f] = "jjofficial"
+        elif _confirm_yodee(f):
+            result[f] = "yodee"
         else:
             unmatched_xlsx.append(f)
 
@@ -119,6 +123,41 @@ def _confirm_a1leage(path: Path) -> bool:
             return False
         hdrs = {str(v).strip() for v in row if v}
         return {"貨號", "收件人地址", "購買品項"}.issubset(hdrs)
+    except Exception:
+        return False
+
+
+def _confirm_jjofficial(path: Path) -> bool:
+    """確認 xlsx 為捷捷寶寶粥官網訂單（Sales 工作表 + 全家服務編號欄位）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        if "Sales" not in wb.sheetnames:
+            return False
+        ws   = wb["Sales"]
+        row  = next(ws.iter_rows(max_row=1, values_only=True), None)
+        if not row:
+            return False
+        hdrs = {str(v).strip() for v in row if v}
+        return {"訂單號碼", "全家服務編號 / 7-11 店號", "加購品類型"}.issubset(hdrs)
+    except Exception:
+        return False
+
+
+def _confirm_yodee(path: Path) -> bool:
+    """確認 xlsx 為優迪通路訂單（含標頭列 訂單編號…產品名稱 的工作表）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        for shname in wb.sheetnames:
+            ws = wb[shname]
+            row = next(ws.iter_rows(max_row=1, values_only=True), None)
+            if not row:
+                continue
+            hdrs = [str(v).strip() if v else "" for v in row]
+            if hdrs[0] == "訂單編號" and "產品名稱" in hdrs:
+                return True
+        return False
     except Exception:
         return False
 
