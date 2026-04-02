@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from converters.base import open_xlsx, SHOPEE_XLSX_PASSWORD
+
 
 def detect_each(files: list[Path]) -> dict[Path, str | None]:
     """
@@ -64,16 +66,20 @@ def detect(files: list[Path]) -> str | None:
 # ── 內部確認函式 ──────────────────────────────────────────────────────────
 
 def _confirm_shopee(path: Path) -> bool:
-    """確認 xlsx 為蝦皮訂單（工作表 orders + 含蝦皮專線欄位）"""
+    """確認 xlsx 為蝦皮訂單（工作表 orders + 含蝦皮專線欄位；支援加密檔）"""
+    # 蝦皮固定檔名前綴，加密檔解密後欄位可能無法讀取，以此作為輔助辨識
+    name_match = re.match(r"Order\.toship\.", path.name, re.IGNORECASE) is not None
     try:
-        import openpyxl
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        wb = open_xlsx(path, password=SHOPEE_XLSX_PASSWORD)
         if "orders" not in wb.sheetnames:
             return False
         ws   = wb["orders"]
         hdrs = [str(c.value) if c.value else "" for c in next(ws.iter_rows(max_row=1))]
-        # 欄位名稱可能含換行，用 in 部分比對
-        return any("蝦皮專線和包裹查詢碼" in h for h in hdrs)
+        # 優先：欄位精確比對
+        if any("蝦皮專線和包裹查詢碼" in h for h in hdrs):
+            return True
+        # 備用：加密檔解密成功 + orders 工作表存在 + 符合蝦皮檔名格式
+        return name_match
     except Exception:
         return False
 

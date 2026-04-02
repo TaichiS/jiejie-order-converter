@@ -12,7 +12,7 @@ from pathlib import Path
 import openpyxl
 from openpyxl import Workbook
 
-from converters.base import BaseConverter, ConversionResult, RowError
+from converters.base import BaseConverter, ConversionResult, RowError, open_xlsx, SHOPEE_XLSX_PASSWORD
 from app.utils import output_path
 
 
@@ -44,7 +44,7 @@ class ShopeeConverter(BaseConverter):
             return errors
 
         try:
-            wb = openpyxl.load_workbook(xlsx[0], read_only=True, data_only=True)
+            wb = open_xlsx(xlsx[0], password=SHOPEE_XLSX_PASSWORD)
             if "orders" not in wb.sheetnames:
                 errors.append(RowError(0, "sheet", xlsx[0].name, "工作表 'orders' 不存在"))
         except Exception as e:
@@ -54,7 +54,7 @@ class ShopeeConverter(BaseConverter):
     def _process(self, input_files: list[Path]) -> ConversionResult:
         order_file = next(f for f in input_files if f.suffix.lower() == ".xlsx")
 
-        wb_in  = openpyxl.load_workbook(order_file, read_only=True, data_only=True)
+        wb_in  = open_xlsx(order_file, password=SHOPEE_XLSX_PASSWORD)
         ws_in  = wb_in["orders"]
         rows   = list(ws_in.iter_rows(values_only=True))
         header = list(rows[0])

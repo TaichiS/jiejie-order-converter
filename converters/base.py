@@ -5,11 +5,41 @@ BaseConverter 抽象基底類，以及共用資料結構 ConversionResult、RowE
 from __future__ import annotations
 
 import csv
+import io
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from difflib import get_close_matches
 from pathlib import Path
+
+SHOPEE_XLSX_PASSWORD = "870993"
+
+
+def open_xlsx(path: Path, password: str | None = None,
+              read_only: bool = True, data_only: bool = True):
+    """
+    開啟 xlsx 檔案，自動處理加密保護。
+    若直接開啟失敗且提供了 password，嘗試以 msoffcrypto 解密後再開。
+    回傳 openpyxl.Workbook；失敗時拋出原始例外。
+    """
+    import openpyxl
+    try:
+        return openpyxl.load_workbook(path, read_only=read_only, data_only=data_only)
+    except Exception as first_err:
+        if password is None:
+            raise
+        # 嘗試解密
+        try:
+            import msoffcrypto
+            with open(path, "rb") as f:
+                office = msoffcrypto.OfficeFile(f)
+                office.load_key(password=password)
+                buf = io.BytesIO()
+                office.decrypt(buf)
+            buf.seek(0)
+            return openpyxl.load_workbook(buf, read_only=read_only, data_only=data_only)
+        except Exception:
+            raise first_err  # 解密也失敗，回傳原始錯誤
 
 # 品名中的「階段代碼-序號」前綴，如 0-1、1-01、1P-05、2-S11、2-D01、3-3
 # \d+[A-Z]? = 前段（數字 + 可選字母，如 1P）
