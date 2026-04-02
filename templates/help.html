@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}說明 — 捷捷寶寶粥 訂單轉換系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <div class="glass-card p-4 mb-4">
+      <h5 class="fw-bold mb-1" style="color:#c2410c">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-3px">
+          <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/>
+        </svg>
+        使用說明
+      </h5>
+      <p class="text-muted small mb-0">目前支援以下 4 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
+    </div>
+
+    <!-- 蝦皮 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-shopee px-3 py-1" style="font-size:.85rem">蝦皮</span>
+        <h6 class="fw-bold mb-0">蝦皮商城訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td><code>Order.toship.XXXXXXXX.xlsx</code></td></tr>
+          <tr><td class="text-muted">工作表名稱</td><td><code>orders</code>（小寫）</td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>欄位含「蝦皮專線和包裹查詢碼」</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD.xlsx（Sheet1）＋ MMDD黑貓.csv</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- A1婦幼展 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-a1baby px-3 py-1" style="font-size:.85rem">A1婦幼展</span>
+        <h6 class="fw-bold mb-0">A1 婦幼展訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>需兩個檔案：<code>MMDD.xlsx</code>（主檔）＋ <code>MMDD-1.xlsx</code>（明細）</td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>主檔含「原始單號、訂單標籤與備註」；明細含「發票號碼、商品名稱」</td></tr>
+          <tr><td class="text-muted">注意事項</td><td>兩個檔案必須放在同一資料夾，且日期前綴一致</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD.xlsx（Sheet1）＋ MMDD黑貓.csv</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 樂齡網 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-leage px-3 py-1" style="font-size:.85rem">樂齡網</span>
+        <h6 class="fw-bold mb-0">樂齡網（信）訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>PDF 訂單檔（.pdf）</td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>PDF 第一頁含「樂齡生活事業」或訂單編號 <code>PO########</code></td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD.xlsx（Sheet1）＋ MMDD黑貓.csv</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- A1樂齡官網 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-a1leage px-3 py-1" style="font-size:.85rem">A1樂齡官網</span>
+        <h6 class="fw-bold mb-0">A1 樂齡官網訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>後台匯出的 <code>.xlsx</code> 檔</td></tr>
+          <tr><td class="text-muted">工作表名稱</td><td><code>Orders</code>（大寫 O）</td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>「購買品項」欄含「捷捷樂齡食品」</td></tr>
+          <tr><td class="text-muted">品號資料</td><td>使用獨立的 <code>A1樂齡官網/品號資料.csv</code>（與其他來源分開）</td></tr>
+          <tr><td class="text-muted">貨到付款</td><td>自動新增手續費品項（F59900003，$30），並計算代收金額</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD.xlsx（Sheet1）＋ MMDD黑貓.csv</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 通用說明 -->
+    <div class="glass-card p-4">
+      <h6 class="fw-bold mb-3" style="color:#c2410c">通用操作流程</h6>
+      <ol class="mb-0" style="font-size:.9rem;line-height:2">
+        <li>將訂單檔案（xlsx / pdf）放入同一個資料夾</li>
+        <li>在首頁輸入資料夾路徑，或點選資料夾圖示選取（路徑會自動記住）</li>
+        <li>點擊「掃描」，系統自動辨識訂單來源</li>
+        <li>確認檔案清單，勾選要處理的檔案，點「開始轉換」</li>
+        <li>轉換完成後可直接下載輸出的 xlsx 與 csv</li>
+      </ol>
+      <hr class="my-3" style="border-color:rgba(0,0,0,.08)">
+      <div style="font-size:.85rem;color:#78716c">
+        <strong>輸出路徑：</strong><code>output/{來源}/{年-月}/</code>
+        <strong>歸檔路徑：</strong><code>archive/{來源}/{年-月}/</code>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+
+# 資料庫
+data/*.db
+data/*.db-*
+
+# 執行期產生的資料
+output/
+archive/
+logs/
+
+# 本機路徑設定
+config.json
+
+# 訂單原始資料（含客戶個資，不上傳）
+蝦皮/
+A1婦幼/
+樂齡網(信)/
+測試資料/
+A1樂齡官網/原檔/
+A1樂齡官網/訂單/
+A1樂齡官網/黑貓托運單/
+A1樂齡官網/黑貓印製托運單.csv
+
+# 根目錄散落的測試檔
+*.xlsx
+*.jpg
+*.png
+
+# macOS
+.DS_Store

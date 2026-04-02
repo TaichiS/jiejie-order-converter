@@ -1,0 +1,11 @@
+[project]
+name = "jjbaby-order-converter"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "flask-sqlalchemy>=3.1",
+    "openpyxl>=3.1",
+    "pandas>=2.2",
+    "pdfplumber>=0.11",
+]

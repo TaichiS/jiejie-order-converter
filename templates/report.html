@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}轉換記錄 — 捷捷寶寶粥 訂單轉換系統{% endblock %}
+
+{% block content %}
+<div class="glass-card p-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <h5 class="fw-bold mb-0" style="color:#c2410c">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-3px">
+        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+      轉換記錄
+    </h5>
+
+    <!-- 篩選列 -->
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <select class="glass-input form-select form-select-sm" id="filterSource" style="width:auto" onchange="loadReport()">
+        <option value="">全部來源</option>
+        {% for key, label in source_labels.items() %}
+        <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="date" class="glass-input form-control form-control-sm" id="filterFrom"
+             style="width:auto" onchange="loadReport()">
+      <span style="color:#9a3412;font-size:.85rem">至</span>
+      <input type="date" class="glass-input form-control form-control-sm" id="filterTo"
+             style="width:auto" onchange="loadReport()">
+      <button class="btn btn-sm btn-glass-secondary" onclick="clearFilters()">清除</button>
+    </div>
+  </div>
+
+  <!-- 統計卡片 -->
+  <div class="row g-3 mb-4" id="statCards">
+    <div class="col-6 col-md-3">
+      <div class="stat-card p-3 text-center">
+        <div class="stat-num count-up" id="statTotal" data-target="0">0</div>
+        <small class="stat-label">總筆數</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card p-3 text-center">
+        <div class="stat-num count-up" id="statSuccess" data-target="0" style="color:#15803d">0</div>
+        <small class="stat-label">成功訂單</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card p-3 text-center">
+        <div class="stat-num count-up" id="statFail" data-target="0" style="color:#b91c1c">0</div>
+        <small class="stat-label">失敗訂單</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card p-3 text-center">
+        <div class="stat-num count-up" id="statManual" data-target="0" style="color:#c2410c">0</div>
+        <small class="stat-label">待人工</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- 表格 -->
+  <div class="table-responsive">
+    <table class="glass-table table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>時間</th>
+          <th>執行者</th>
+          <th>來源</th>
+          <th class="text-center">成功</th>
+          <th class="text-center">失敗</th>
+          <th class="text-center">待人工</th>
+          <th class="text-center">狀態</th>
+          <th class="text-center">操作</th>
+        </tr>
+      </thead>
+      <tbody id="reportBody">
+        <tr>
+          <td colspan="8" class="text-center py-5">
+            <div class="spinner-border text-warning" style="width:2rem;height:2rem"></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="emptyReport" class="text-center py-5 d-none">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="1.2" class="mb-3">
+      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    <p style="color:#9a3412;font-size:.9rem">查無符合條件的記錄</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SOURCE_LABELS = {{ source_labels | tojson }};
+const SOURCE_COLORS = {{ source_colors | tojson }};
+
+function clearFilters() {
+  document.getElementById('filterSource').value = '';
+  document.getElementById('filterFrom').value = '';
+  document.getElementById('filterTo').value = '';
+  loadReport();
+}
+
+async function loadReport() {
+  const source = document.getElementById('filterSource').value;
+  const from   = document.getElementById('filterFrom').value;
+  const to     = document.getElementById('filterTo').value;
+  const params = new URLSearchParams();
+  if (source) params.set('source', source);
+  if (from)   params.set('from', from);
+  if (to)     params.set('to', to);
+
+  const tbody = document.getElementById('reportBody');
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border text-warning" style="width:1.5rem;height:1.5rem"></div></td></tr>';
+
+  const res  = await fetch('/report/data?' + params);
+  const logs = await res.json();
+
+  document.getElementById('emptyReport').classList.toggle('d-none', logs.length > 0);
+
+  // 統計
+  let totSuccess = 0, totFail = 0, totManual = 0;
+  logs.forEach(l => { totSuccess += l.success_count; totFail += l.fail_count; totManual += l.manual_count; });
+  animateCount('statTotal',   logs.length);
+  animateCount('statSuccess', totSuccess);
+  animateCount('statFail',    totFail);
+  animateCount('statManual',  totManual);
+
+  if (!logs.length) { tbody.innerHTML = ''; return; }
+
+  tbody.innerHTML = logs.map(log => {
+    const src    = log.source_type;
+    const color  = SOURCE_COLORS[src] || 'secondary';
+    const label  = SOURCE_LABELS[src] || src;
+    const dt     = new Date(log.created_at).toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false});
+    const status = statusChip(log.status);
+    return `<tr>
+      <td><small>${dt}</small></td>
+      <td>${log.operator || '—'}</td>
+      <td><span class="badge-source badge-${src}">${label}</span></td>
+      <td class="text-center"><span class="fw-bold" style="color:#15803d">${log.success_count}</span></td>
+      <td class="text-center"><span class="fw-bold" style="color:#b91c1c">${log.fail_count}</span></td>
+      <td class="text-center"><span class="fw-bold" style="color:#c2410c">${log.manual_count}</span></td>
+      <td class="text-center">${status}</td>
+      <td class="text-center">
+        ${log.fail_count > 0 ? `<a href="/errors/${log.id}" class="btn btn-sm btn-glass-secondary me-1" title="錯誤明細">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+        </a>` : ''}
+        <a href="/download/${log.id}" class="btn btn-sm btn-glass-secondary" title="下載">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        </a>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function statusChip(status) {
+  const map = {
+    completed: ['completed', '完成'],
+    partial:   ['partial',   '部分'],
+    failed:    ['failed',    '失敗'],
+  };
+  const [cls, txt] = map[status] || ['secondary', status];
+  return `<span class="status-chip status-${cls}">${txt}</span>`;
+}
+
+loadReport();
+</script>
+{% endblock %}

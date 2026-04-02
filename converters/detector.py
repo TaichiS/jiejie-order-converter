@@ -1,0 +1,134 @@
+"""
+converters/detector.py
+來源自動偵測：檔名為初步提示，讀取內部欄位/文字確認（雙重驗證）。
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+def detect_each(files: list[Path]) -> dict[Path, str | None]:
+    """
+    逐檔偵測來源類型，回傳 {path: source_type} 對應表。
+    a1baby 需要成對檔案，兩個都會標記為 'a1baby'。
+    """
+    result: dict[Path, str | None] = {}
+
+    xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
+    pdf_files  = [f for f in files if f.suffix.lower() == ".pdf"]
+
+    # PDF：各自確認是否為樂齡網
+    for f in pdf_files:
+        result[f] = "leage" if _confirm_leage(f) else None
+
+    # xlsx：逐檔確認
+    unmatched_xlsx = []
+    for f in xlsx_files:
+        if _confirm_shopee(f):
+            result[f] = "shopee"
+        elif _confirm_a1leage(f):
+            result[f] = "a1leage"
+        else:
+            unmatched_xlsx.append(f)
+
+    # 未命中的 xlsx：嘗試 a1baby 配對
+    main_file, detail_file = _find_a1baby_pair(unmatched_xlsx)
+    if main_file and detail_file and _confirm_a1baby(main_file, detail_file):
+        result[main_file]   = "a1baby"
+        result[detail_file] = "a1baby"
+        unmatched_xlsx = [f for f in unmatched_xlsx if f not in (main_file, detail_file)]
+
+    for f in unmatched_xlsx:
+        result[f] = None
+
+    return result
+
+
+def detect(files: list[Path]) -> str | None:
+    """
+    從一組（同來源）檔案中偵測訂單來源類型，供 run_conversion 使用。
+    回傳 'shopee' | 'a1baby' | 'leage' | 'a1leage'，無法識別回傳 None。
+    """
+    types = set(detect_each(files).values()) - {None}
+    if len(types) == 1:
+        return types.pop()
+    # 多種類型或全部無法識別
+    return None
+
+
+# ── 內部確認函式 ──────────────────────────────────────────────────────────
+
+def _confirm_shopee(path: Path) -> bool:
+    """確認 xlsx 為蝦皮訂單（工作表 orders + 含蝦皮專線欄位）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        if "orders" not in wb.sheetnames:
+            return False
+        ws   = wb["orders"]
+        hdrs = [str(c.value) if c.value else "" for c in next(ws.iter_rows(max_row=1))]
+        # 欄位名稱可能含換行，用 in 部分比對
+        return any("蝦皮專線和包裹查詢碼" in h for h in hdrs)
+    except Exception:
+        return False
+
+
+def _find_a1baby_pair(xlsx_files: list[Path]) -> tuple[Path | None, Path | None]:
+    """尋找 MMDD.xlsx 與 MMDD-1.xlsx 配對"""
+    detail_files = [f for f in xlsx_files if re.search(r"-1\.xlsx$", f.name, re.IGNORECASE)]
+    for detail in detail_files:
+        main_name = re.sub(r"-1\.xlsx$", ".xlsx", detail.name, flags=re.IGNORECASE)
+        main_file = detail.parent / main_name
+        if main_file in xlsx_files or main_file.exists():
+            return main_file, detail
+    return None, None
+
+
+def _confirm_a1baby(main: Path, detail: Path) -> bool:
+    """確認婦幼展主檔含 原始單號+訂單標籤與備註，明細含 發票號碼+商品名稱"""
+    try:
+        import openpyxl
+        wb_main = openpyxl.load_workbook(main,   read_only=True, data_only=True)
+        wb_det  = openpyxl.load_workbook(detail, read_only=True, data_only=True)
+
+        ws_main = wb_main.active
+        ws_det  = wb_det.active
+
+        def hdrs(ws):
+            row = next(ws.iter_rows(max_row=1), [])
+            return {str(c.value).strip() if c.value else "" for c in row}
+
+        main_ok   = {"原始單號", "訂單標籤與備註"}.issubset(hdrs(ws_main))
+        detail_ok = {"發票號碼", "商品名稱"}.issubset(hdrs(ws_det))
+        return main_ok and detail_ok
+    except Exception:
+        return False
+
+
+def _confirm_a1leage(path: Path) -> bool:
+    """確認 xlsx 為 A1樂齡官網訂單（Orders 工作表 + 特有欄位名稱組合）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        if "Orders" not in wb.sheetnames:
+            return False
+        ws   = wb["Orders"]
+        row  = next(ws.iter_rows(max_row=1, values_only=True), None)
+        if not row:
+            return False
+        hdrs = {str(v).strip() for v in row if v}
+        return {"貨號", "收件人地址", "購買品項"}.issubset(hdrs)
+    except Exception:
+        return False
+
+
+def _confirm_leage(path: Path) -> bool:
+    """確認 PDF 含樂齡網文字特徵"""
+    try:
+        import pdfplumber
+        with pdfplumber.open(path) as pdf:
+            text = pdf.pages[0].extract_text() or ""
+            return bool(re.search(r"樂齡生活事業|PO\d{8}", text))
+    except Exception:
+        return False

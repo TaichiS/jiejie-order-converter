@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}設定 — 捷捷寶寶粥 訂單轉換系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="glass-card p-4">
+      <h5 class="fw-bold mb-4" style="color:#c2410c">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-3px">
+          <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        偏好設定
+      </h5>
+
+      <form method="POST" action="{{ url_for('main.settings') }}" onsubmit="handleSettingsSave(event)">
+        <div class="mb-4">
+          <label class="form-label fw-semibold small" for="default_folder">預設資料夾路徑</label>
+          <div class="input-group">
+            <input type="text" class="glass-input form-control" id="default_folder" name="default_folder"
+                   value="{{ config.get('default_folder', '') }}"
+                   placeholder="選擇或輸入資料夾路徑">
+            <button class="btn btn-glass-secondary px-3" type="button" onclick="browseFolderPicker('default_folder')" title="選擇資料夾">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="form-text">每次開啟系統時自動帶入此資料夾路徑</div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold small" for="default_operator">預設執行者名稱</label>
+          <input type="text" class="glass-input form-control" id="default_operator" name="default_operator"
+                 value="{{ config.get('default_operator', '') }}"
+                 placeholder="例：小美">
+          <div class="form-text">轉換記錄中顯示的操作人員名稱</div>
+        </div>
+
+        <button type="submit" class="btn btn-glass-primary w-100 py-2" id="btnSaveSettings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-2px">
+            <path d="M5 13l4 4L19 7"/>
+          </svg>
+          儲存設定
+        </button>
+      </form>
+    </div>
+
+    <!-- 系統資訊 -->
+    <div class="glass-card p-4 mt-4">
+      <h6 class="fw-bold mb-3" style="color:#c2410c">系統資訊</h6>
+      <div class="row g-2" style="font-size:.87rem">
+        <div class="col-6 text-muted">版本</div>
+        <div class="col-6">v1.0.0</div>
+        <div class="col-6 text-muted">監聽埠</div>
+        <div class="col-6"><code>5099</code></div>
+        <div class="col-6 text-muted">資料庫</div>
+        <div class="col-6"><code>data/conversion.db</code></div>
+        <div class="col-6 text-muted">歸檔路徑</div>
+        <div class="col-6"><code>archive/</code></div>
+        <div class="col-6 text-muted">輸出路徑</div>
+        <div class="col-6"><code>output/</code></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function handleSettingsSave(e) {
+  e.preventDefault();
+  const form = e.target;
+  const btn  = document.getElementById('btnSaveSettings');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>儲存中...';
+
+  fetch(form.action, {
+    method: 'POST',
+    body: new FormData(form),
+  }).then(res => {
+    if (res.redirected || res.ok) {
+      showToast('設定已儲存', 'success');
+    } else {
+      showToast('儲存失敗，請重試', 'danger');
+    }
+  }).catch(() => {
+    showToast('發生錯誤，請重試', 'danger');
+  }).finally(() => {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-2px"><path d="M5 13l4 4L19 7"/></svg>儲存設定';
+  });
+}
+</script>
+{% endblock %}

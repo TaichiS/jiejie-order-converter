@@ -1,0 +1,196 @@
+"""
+converters/base.py
+BaseConverter 抽象基底類，以及共用資料結構 ConversionResult、RowError。
+"""
+from __future__ import annotations
+
+import csv
+import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from difflib import get_close_matches
+from pathlib import Path
+
+# 品名中的「階段代碼-序號」前綴，如 0-1、1-01、1P-05、2-S11、2-D01、3-3
+# \d+[A-Z]? = 前段（數字 + 可選字母，如 1P）
+# -[A-Z]?   = 連字號 + 可選系列字母（如 S、D、M）
+# \d+        = 後段序號
+_CODE_RE      = re.compile(r'^(\d+[A-Z]?-[A-Z]?\d+)')
+# 蝦皮特例：缺少「2-」前綴的燉飯/義麵代碼，如 S11、M3
+_BARE_CODE_RE = re.compile(r'^([A-Z]\d+)')
+
+
+@dataclass
+class RowError:
+    """單一列的轉換錯誤資訊"""
+    row_number:     int
+    field_name:     str
+    original_value: str
+    reason:         str
+    candidates:     list = field(default_factory=list)  # [{品號,品名,商品結帳價,match_type}]
+
+
+@dataclass
+class ConversionResult:
+    """單次轉換的完整結果"""
+    source_type:   str
+    success_count: int              = 0
+    fail_count:    int              = 0
+    manual_count:  int              = 0   # 需人工確認（數量異常等）
+    order_date:    str              = ""  # 從訂單內部讀取的日期 YYYYMMDD
+    output_files:  list[Path]       = field(default_factory=list)
+    errors:        list[RowError]   = field(default_factory=list)
+    status:        str              = "completed"  # completed | partial | failed
+
+
+class BaseConverter(ABC):
+    """所有轉換器的抽象基底類"""
+
+    def __init__(self, reference_csv: Path, output_dir: Path):
+        self.reference_csv = reference_csv
+        self.output_dir    = output_dir
+        self._product_map: dict[str, dict] = {}   # 品名 → row dict
+        self._code_map:    dict[str, dict] = {}   # 代碼前綴 → row dict（如 "1-08" → {...}）
+
+    # ── 公開入口 ──────────────────────────────────────────────────────────
+    def convert(self, input_files: list[Path]) -> ConversionResult:
+        """固定流程：載入品號 → 驗證 → 轉換"""
+        self._load_reference()
+        errors = self._validate(input_files)
+        if errors:
+            return ConversionResult(
+                source_type=self.source_type,
+                fail_count=len(errors),
+                errors=errors,
+                status="failed",
+            )
+        return self._process(input_files)
+
+    # ── 共用：載入品號資料 ─────────────────────────────────────────────────
+    def _load_reference(self) -> None:
+        """
+        以品名為 key，建立品號資料快取。
+        支援「別名行」：同品號可有多行，別名行的空欄自動繼承主行資料。
+        主行 = 商品結帳價有值；別名行 = 商品結帳價為空，其餘空欄從主行補齊。
+        """
+        self._product_map.clear()
+        all_rows: list[dict] = []
+        main_by_no: dict[str, dict] = {}   # 品號 → 主行
+
+        with open(self.reference_csv, encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                name = row.get("品名", "").strip()
+                if not name:
+                    continue
+                all_rows.append(row)
+                prod_no = row.get("品號", "").strip()
+                if row.get("商品結帳價", "").strip() and prod_no:
+                    main_by_no[prod_no] = row   # 紀錄主行
+
+        for row in all_rows:
+            name    = row["品名"].strip()
+            prod_no = row.get("品號", "").strip()
+            # 別名行：商品結帳價為空 → 從主行繼承，再覆蓋非空欄位
+            if not row.get("商品結帳價", "").strip() and prod_no in main_by_no:
+                merged = dict(main_by_no[prod_no])
+                for k, v in row.items():
+                    if v and v.strip():
+                        merged[k] = v
+                self._product_map[name] = merged
+            else:
+                self._product_map[name] = row
+
+        # 建立代碼索引（品名含「階段代碼-序號」前綴者）
+        self._code_map.clear()
+        for name, prod in self._product_map.items():
+            m = _CODE_RE.match(name)
+            if m:
+                self._code_map[m.group(1)] = prod
+
+    def _lookup_by_name(self, query: str,
+                        scope: str | None = None,
+                        amount: float = 0) -> tuple[dict | None, list[dict]]:
+        """
+        多層查找，回傳 (最佳匹配 | None, 候選清單)。
+        候選清單在找不到精確結果時提供，供人工確認。
+
+        查找順序：
+        1. 從 query 提取代碼前綴 → _code_map（如 "1-08木耳..." → "1-08"）
+        2. 蝦皮特例：裸代碼補 "2-" 前綴（如 "S11..." → "2-S11"）
+        3. 精確品名比對 _product_map
+        4. difflib 模糊比對（名稱相近）+ 金額整除比對 → 候選清單
+
+        scope:  限定品號前綴，如 "F" 只比對樂齡網品項
+        amount: 訂單金額，>0 時加入金額整除候選
+        """
+        q = query.strip()
+        pool = (
+            {k: v for k, v in self._product_map.items()
+             if str(v.get("品號", "")).startswith(scope)}
+            if scope else self._product_map
+        )
+
+        # 1. 代碼前綴比對
+        m = _CODE_RE.match(q)
+        if m:
+            code = m.group(1)
+            prod = self._code_map.get(code)
+            if prod and (not scope or str(prod.get("品號", "")).startswith(scope)):
+                return prod, []
+
+        # 2. 蝦皮裸代碼（S11 → 2-S11）
+        m2 = _BARE_CODE_RE.match(q)
+        if m2:
+            prod = self._code_map.get("2-" + m2.group(1))
+            if prod and (not scope or str(prod.get("品號", "")).startswith(scope)):
+                return prod, []
+
+        # 3. 精確品名
+        prod = pool.get(q)
+        if prod:
+            return prod, []
+
+        # 4. 候選清單：名稱相似 + 金額整除
+        names      = list(pool.keys())
+        close_keys = get_close_matches(q, names, n=3, cutoff=0.35)
+        seen_nos: set[str] = set()
+        candidates: list[dict] = []
+
+        for k in close_keys:
+            p = dict(pool[k])
+            p["match_type"] = "name"
+            no = p.get("品號", "")
+            if no not in seen_nos:
+                seen_nos.add(no)
+                candidates.append(p)
+
+        if amount > 0:
+            for name, p in pool.items():
+                cp = float(p.get("商品結帳價") or 0)
+                if cp > 0 and amount % cp == 0:
+                    no = p.get("品號", "")
+                    if no not in seen_nos:
+                        seen_nos.add(no)
+                        c = dict(p)
+                        c["match_type"] = "price"
+                        candidates.append(c)
+
+        return None, candidates[:5]
+
+    def _lookup_product(self, name: str) -> dict | None:
+        """精確比對品名，找不到回傳 None（向下相容舊呼叫）"""
+        return self._product_map.get(name.strip())
+
+    # ── 抽象方法（子類實作）────────────────────────────────────────────────
+    @property
+    @abstractmethod
+    def source_type(self) -> str:
+        """回傳 'shopee' | 'a1baby' | 'leage'"""
+
+    @abstractmethod
+    def _validate(self, input_files: list[Path]) -> list[RowError]:
+        """驗證輸入檔案格式，回傳錯誤列表（空列表代表通過）"""
+
+    @abstractmethod
+    def _process(self, input_files: list[Path]) -> ConversionResult:
+        """實際轉換邏輯"""
