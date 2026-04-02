@@ -168,7 +168,7 @@ def _parse_pdf(path: Path) -> dict | None:
         text = "\n".join(p.extract_text() or "" for p in pdf.pages)
 
     # 訂單單號（有空格，如 P O 2 6 0 3 2 3 0 0 0 0 2 5）
-    po_match = re.search(r"訂\s*單\s*單\s*號\s*[:：]?\s*([P\s][O\s]\s*[\d\s]+)", text)
+    po_match = re.search(r"訂\s*單\s*單\s*號\s*[:：]?\s*(P\s*O[\d\s]+)", text)
     po_number = re.sub(r"\s+", "", po_match.group(1)).upper() if po_match else ""
     # 確保格式為 PO + digits
     po_clean = re.sub(r"[^A-Z0-9]", "", po_number)
