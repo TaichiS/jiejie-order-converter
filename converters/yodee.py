@@ -44,9 +44,11 @@ class YodeeConverter(BaseConverter):
             wb = openpyxl.load_workbook(xlsx[0], read_only=True, data_only=True)
             if not _find_data_sheets(wb):
                 return [RowError(0, "sheet", xlsx[0].name,
-                                 "找不到含標頭列（訂單編號…）的工作表")]
+                                 "找不到含標頭列（訂單編號…）的工作表",
+                                 source_file=xlsx[0].name)]
         except Exception as e:
-            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}")]
+            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}",
+                             source_file=xlsx[0].name)]
         return []
 
     def _process(self, input_files: list[Path]) -> ConversionResult:

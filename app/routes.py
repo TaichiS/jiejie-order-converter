@@ -118,16 +118,24 @@ def convert():
         with app.app_context():
             try:
                 _progress_queue.put({"type": "progress", "message": "開始轉換..."})
-                log = services.run_conversion(folder, operator, forced_source,
-                                              selected_files)
+                logs = services.run_conversion(folder, operator, forced_source,
+                                               selected_files)
+                all_success = sum(l.success_count for l in logs)
+                all_fail    = sum(l.fail_count    for l in logs)
+                all_manual  = sum(l.manual_count  for l in logs)
+                combined_status = (
+                    "success" if all(l.status == "success" for l in logs)
+                    else "partial" if any(l.status == "success" for l in logs)
+                    else logs[-1].status
+                )
                 _progress_queue.put({
                     "type":        "done",
-                    "log_id":      log.id,
-                    "success":     log.success_count,
-                    "fail":        log.fail_count,
-                    "manual":      log.manual_count,
-                    "status":      log.status,
-                    "source_type": log.source_type,
+                    "log_id":      logs[-1].id,
+                    "success":     all_success,
+                    "fail":        all_fail,
+                    "manual":      all_manual,
+                    "status":      combined_status,
+                    "source_type": "+".join(l.source_type for l in logs),
                 })
             except Exception as e:
                 _progress_queue.put({"type": "error", "message": str(e)})

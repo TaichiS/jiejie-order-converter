@@ -54,6 +54,7 @@ class ConversionError(db.Model):
     original_value  = db.Column(db.Text)
     reason          = db.Column(db.Text, nullable=False)
     candidates_json = db.Column(db.Text)   # JSON 陣列：[{品號,品名,商品結帳價,match_type}]
+    source_file     = db.Column(db.String(255), default="")
 
     log = db.relationship("ConversionLog", back_populates="errors")
 
@@ -69,4 +70,5 @@ class ConversionError(db.Model):
             "original_value": self.original_value or "",
             "reason":         self.reason,
             "candidates":     self.candidates,
+            "source_file":    self.source_file or "",
         }

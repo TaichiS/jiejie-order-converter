@@ -220,6 +220,15 @@ body {
   padding: 0.2rem 0.6rem;
   border-radius: 20px;
 }
+.badge-kadomo {
+  background: rgba(17, 24, 39, 0.1);
+  color: #111827;
+  border: 1px solid rgba(17, 24, 39, 0.25);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
 .badge-unknown {
   background: rgba(156, 163, 175, 0.18);
   color: #374151;

@@ -16,9 +16,10 @@ from app.utils import archive_path, output_path, SOURCE_LABELS
 from converters import detector
 
 BASE_DIR               = Path(__file__).resolve().parent.parent
-REFERENCE_CSV          = BASE_DIR / "reference" / "品號資料.csv"
-A1LEAGE_REFERENCE_CSV  = BASE_DIR / "A1樂齡官網" / "品號資料.csv"
+REFERENCE_CSV            = BASE_DIR / "reference" / "品號資料.csv"
+A1LEAGE_REFERENCE_CSV    = BASE_DIR / "A1樂齡官網" / "品號資料.csv"
 JJOFFICIAL_REFERENCE_CSV = BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv"
+KADOMO_REF               = BASE_DIR / "卡多摩" / "條碼對照表.json"
 OUTPUT_DIR             = BASE_DIR / "output"
 ARCHIVE_DIR            = BASE_DIR / "archive"
 
@@ -91,32 +92,15 @@ def _is_archived(filename: str, archived_names: set[str]) -> bool:
 
 def run_conversion(folder: str, operator: str,
                    forced_source: str | None = None,
-                   selected_files: list[str] | None = None) -> ConversionLog:
+                   selected_files: list[str] | None = None) -> list[ConversionLog]:
     """
-    執行完整轉換流程：
+    執行完整轉換流程，支援同一資料夾中多種來源類型混合。
     1. 掃描資料夾，收集待處理檔案
-    2. 偵測來源
-    3. 呼叫對應 Converter
-    4. 歸檔原始檔
-    5. 寫入 DB
-    回傳 ConversionLog
+    2. 逐檔偵測來源（或使用 forced_source）
+    3. 依來源類型分組，各組呼叫對應 Converter
+    4. 歸檔原始檔，寫入 DB
+    回傳 list[ConversionLog]（每種來源一筆）
     """
-    from converters.shopee      import ShopeeConverter
-    from converters.a1baby      import A1BabyConverter
-    from converters.leage       import LeageConverter
-    from converters.a1leage     import A1LeageConverter
-    from converters.jjofficial  import JJOfficialConverter
-    from converters.yodee       import YodeeConverter
-
-    CONVERTER_MAP = {
-        "shopee":     ShopeeConverter,
-        "a1baby":     A1BabyConverter,
-        "leage":      LeageConverter,
-        "a1leage":    A1LeageConverter,
-        "jjofficial": JJOfficialConverter,
-        "yodee":      YodeeConverter,
-    }
-
     folder_path = Path(folder)
     all_files   = sorted(
         [f for f in folder_path.iterdir()
@@ -135,34 +119,71 @@ def run_conversion(folder: str, operator: str,
     if not pending:
         raise ValueError("資料夾中沒有待處理的檔案")
 
-    # 偵測來源
-    source_type = forced_source or detector.detect(pending)
-    if not source_type:
-        raise ValueError("無法自動判斷訂單來源，請手動指定")
+    # 依 forced_source 或逐檔偵測建立分組
+    if forced_source:
+        groups: dict[str, list[Path]] = {forced_source: pending}
+    else:
+        file_types = detector.detect_each(pending)
+        groups = {}
+        for f, src in file_types.items():
+            if src:
+                groups.setdefault(src, []).append(f)
+        if not groups:
+            raise ValueError("無法自動判斷訂單來源，請手動指定")
 
-    # 執行轉換（各通路使用對應的品號資料）
+    logs = []
+    for source_type, files in groups.items():
+        log = _convert_group(source_type, files, operator)
+        logs.append(log)
+
+    db.session.commit()
+    return logs
+
+
+def _convert_group(source_type: str, files: list[Path], operator: str) -> ConversionLog:
+    """對單一來源類型的檔案群組執行轉換、歸檔，並寫入 DB（不 commit）。"""
+    from converters.shopee      import ShopeeConverter
+    from converters.a1baby      import A1BabyConverter
+    from converters.leage       import LeageConverter
+    from converters.a1leage     import A1LeageConverter
+    from converters.jjofficial  import JJOfficialConverter
+    from converters.yodee       import YodeeConverter
+    from converters.kadomo      import KadomoConverter
+
+    CONVERTER_MAP = {
+        "shopee":     ShopeeConverter,
+        "a1baby":     A1BabyConverter,
+        "leage":      LeageConverter,
+        "a1leage":    A1LeageConverter,
+        "jjofficial": JJOfficialConverter,
+        "yodee":      YodeeConverter,
+        "kadomo":     KadomoConverter,
+    }
+
     YODEE_REFERENCE_CSV = BASE_DIR / "優迪通路" / "品號資料.csv"
     ref_csv = {
         "a1leage":    A1LEAGE_REFERENCE_CSV,
         "jjofficial": JJOFFICIAL_REFERENCE_CSV,
         "yodee":      YODEE_REFERENCE_CSV,
+        "kadomo":     KADOMO_REF,
     }.get(source_type, REFERENCE_CSV)
+
     converter = CONVERTER_MAP[source_type](ref_csv, OUTPUT_DIR)
-    result    = converter.convert(pending)
+    result    = converter.convert(files)
 
     # 解析訂單日期
     order_date = _parse_order_date(result.order_date)
 
     # 歸檔原始檔
-    for f in pending:
+    for f in files:
         dest = archive_path(BASE_DIR, source_type, order_date, f.name)
         shutil.copy2(f, dest)
 
-    # 寫入 DB
+    # 寫入 DB（由呼叫端統一 commit）
     log = ConversionLog(
         operator      = operator or "未填寫",
         source_type   = source_type,
-        input_files   = json.dumps([f.name for f in pending], ensure_ascii=False),
+        input_files   = json.dumps([f.name for f in files], ensure_ascii=False),
         success_count = result.success_count,
         fail_count    = result.fail_count,
         manual_count  = result.manual_count,
@@ -179,6 +200,7 @@ def run_conversion(folder: str, operator: str,
             field_name      = err.field_name,
             original_value  = err.original_value,
             reason          = err.reason,
+            source_file     = err.source_file or "",
             candidates_json = json.dumps(
                 [{k: v for k, v in c.items() if k in ("品號", "品名", "商品結帳價", "match_type")}
                  for c in (err.candidates or [])],
@@ -186,7 +208,6 @@ def run_conversion(folder: str, operator: str,
             ) if err.candidates else None,
         ))
 
-    db.session.commit()
     return log
 
 

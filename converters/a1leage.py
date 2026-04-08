@@ -60,9 +60,11 @@ class A1LeageConverter(BaseConverter):
         try:
             wb = openpyxl.load_workbook(xlsx[0], read_only=True, data_only=True)
             if "Orders" not in wb.sheetnames:
-                return [RowError(0, "sheet", xlsx[0].name, "工作表 'Orders' 不存在")]
+                return [RowError(0, "sheet", xlsx[0].name, "工作表 'Orders' 不存在",
+                                 source_file=xlsx[0].name)]
         except Exception as e:
-            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}")]
+            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}",
+                             source_file=xlsx[0].name)]
         return []
 
     def _process(self, input_files: list[Path]) -> ConversionResult:
@@ -144,7 +146,8 @@ class A1LeageConverter(BaseConverter):
                 if not product:
                     errors.append(RowError(
                         row_idx, "貨號", sku,
-                        f"品號 {sku!r}（{clean_name}）在品號資料中找不到"
+                        f"品號 {sku!r}（{clean_name}）在品號資料中找不到",
+                        source_file=order_file.name,
                     ))
                     has_error = True
                     fail_count += 1

@@ -76,6 +76,11 @@
 
       <!-- 錯誤主資訊 -->
       <div class="d-flex align-items-start gap-3 flex-wrap">
+        {% if err.source_file %}
+        <span class="badge bg-secondary bg-opacity-15 text-secondary rounded-pill flex-shrink-0" style="font-size:.72rem;margin-top:2px;font-family:monospace">
+          📄 {{ err.source_file }}
+        </span>
+        {% endif %}
         {% if err.row_number %}
         <span class="badge bg-danger bg-opacity-15 text-danger rounded-pill flex-shrink-0" style="font-size:.75rem;margin-top:2px">
           行 {{ err.row_number }}

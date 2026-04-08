@@ -58,6 +58,7 @@ class RowError:
     original_value: str
     reason:         str
     candidates:     list = field(default_factory=list)  # [{品號,品名,商品結帳價,match_type}]
+    source_file:    str  = ""                           # 來源檔名（空字串表示未知）
 
 
 @dataclass

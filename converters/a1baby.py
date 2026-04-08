@@ -159,7 +159,7 @@ class A1BabyConverter(BaseConverter):
                 # 已取品項：計入但標記需人工確認
                 already_taken = det_name.startswith("【已取】")
                 if already_taken:
-                    det_name = det_name[5:].strip()
+                    det_name = det_name[4:].strip()  # 【已取】= 4字元
                     manual_count += 1
 
                 # 查品號
@@ -170,13 +170,15 @@ class A1BabyConverter(BaseConverter):
                         row_idx, "商品名稱", det_name,
                         f"找不到「{det_name}」（金額：{det_amount}）",
                         candidates=candidates,
+                        source_file=detail_f.name,
                     ))
                     continue
 
                 checkout_price = float(product.get("商品結帳價") or 1)
                 if checkout_price <= 0:
                     order_errors.append(RowError(row_idx, "商品結帳價", product["品名"],
-                                                  "商品結帳價為 0，無法計算數量"))
+                                                  "商品結帳價為 0，無法計算數量",
+                                                  source_file=detail_f.name))
                     continue
 
                 qty = det_amount / checkout_price
@@ -352,6 +354,10 @@ class A1BabyConverter(BaseConverter):
         prod = self._code_map.get(key)
         if prod:
             return prod, key
+
+        # 5. 精確品名比對（如 2-M寶貝義大利麵 等不在 _code_map 的品項）
+        if pos_name in self._product_map:
+            return self._product_map[pos_name], pos_name
 
         return None, key
 

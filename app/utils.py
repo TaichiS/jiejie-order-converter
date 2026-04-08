@@ -10,6 +10,7 @@ SOURCE_LABELS = {
     "a1leage":    "A1樂齡官網",
     "jjofficial": "捷捷官網",
     "yodee":      "優迪通路",
+    "kadomo":     "卡多摩",
 }
 
 SOURCE_COLORS = {
@@ -19,6 +20,7 @@ SOURCE_COLORS = {
     "a1leage":    "danger",
     "jjofficial": "primary",
     "yodee":      "secondary",
+    "kadomo":     "dark",
 }
 
 

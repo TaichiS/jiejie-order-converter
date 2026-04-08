@@ -46,9 +46,11 @@ class ShopeeConverter(BaseConverter):
         try:
             wb = open_xlsx(xlsx[0], password=SHOPEE_XLSX_PASSWORD)
             if "orders" not in wb.sheetnames:
-                errors.append(RowError(0, "sheet", xlsx[0].name, "工作表 'orders' 不存在"))
+                errors.append(RowError(0, "sheet", xlsx[0].name, "工作表 'orders' 不存在",
+                                       source_file=xlsx[0].name))
         except Exception as e:
-            errors.append(RowError(0, "file", xlsx[0].name, f"無法開啟：{e}"))
+            errors.append(RowError(0, "file", xlsx[0].name, f"無法開啟：{e}",
+                                   source_file=xlsx[0].name))
         return errors
 
     def _process(self, input_files: list[Path]) -> ConversionResult:
@@ -97,6 +99,7 @@ class ShopeeConverter(BaseConverter):
                     row_idx, "商品名稱", full_name,
                     f"找不到「{short_name}」",
                     candidates=candidates,
+                    source_file=order_file.name,
                 ))
                 fail_count += 1
                 continue

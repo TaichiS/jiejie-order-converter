@@ -35,15 +35,17 @@ def detect_each(files: list[Path]) -> dict[Path, str | None]:
             result[f] = "jjofficial"
         elif _confirm_yodee(f):
             result[f] = "yodee"
+        elif _confirm_kadomo(f):
+            result[f] = "kadomo"
         else:
             unmatched_xlsx.append(f)
 
-    # 未命中的 xlsx：嘗試 a1baby 配對
-    main_file, detail_file = _find_a1baby_pair(unmatched_xlsx)
-    if main_file and detail_file and _confirm_a1baby(main_file, detail_file):
-        result[main_file]   = "a1baby"
-        result[detail_file] = "a1baby"
-        unmatched_xlsx = [f for f in unmatched_xlsx if f not in (main_file, detail_file)]
+    # 未命中的 xlsx：嘗試 a1baby 配對（支援多組）
+    for main_file, detail_file in _find_a1baby_pairs(unmatched_xlsx):
+        if _confirm_a1baby(main_file, detail_file):
+            result[main_file]   = "a1baby"
+            result[detail_file] = "a1baby"
+            unmatched_xlsx = [f for f in unmatched_xlsx if f not in (main_file, detail_file)]
 
     for f in unmatched_xlsx:
         result[f] = None
@@ -84,15 +86,17 @@ def _confirm_shopee(path: Path) -> bool:
         return False
 
 
-def _find_a1baby_pair(xlsx_files: list[Path]) -> tuple[Path | None, Path | None]:
-    """尋找 MMDD.xlsx 與 MMDD-1.xlsx 配對"""
-    detail_files = [f for f in xlsx_files if re.search(r"-1\.xlsx$", f.name, re.IGNORECASE)]
-    for detail in detail_files:
-        main_name = re.sub(r"-1\.xlsx$", ".xlsx", detail.name, flags=re.IGNORECASE)
-        main_file = detail.parent / main_name
-        if main_file in xlsx_files or main_file.exists():
-            return main_file, detail
-    return None, None
+def _find_a1baby_pairs(xlsx_files: list[Path]) -> list[tuple[Path, Path]]:
+    """尋找所有 MMDD.xlsx 與 MMDD-1.xlsx 配對，回傳 [(main, detail), ...]"""
+    file_set = set(xlsx_files)
+    pairs = []
+    for f in xlsx_files:
+        if re.search(r"-1\.xlsx$", f.name, re.IGNORECASE):
+            main_name = re.sub(r"-1\.xlsx$", ".xlsx", f.name, flags=re.IGNORECASE)
+            main_file = f.parent / main_name
+            if main_file in file_set:
+                pairs.append((main_file, f))
+    return pairs
 
 
 def _confirm_a1baby(main: Path, detail: Path) -> bool:
@@ -162,6 +166,21 @@ def _confirm_yodee(path: Path) -> bool:
                 continue
             hdrs = [str(v).strip() if v else "" for v in row]
             if hdrs[0] == "訂單編號" and "產品名稱" in hdrs:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _confirm_kadomo(path: Path) -> bool:
+    """確認 xlsx 為卡多摩採購單（含「倉別」與「商品條碼」的標題列，前 15 列內）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        ws = wb.active
+        for row in ws.iter_rows(max_row=15, values_only=True):
+            cells = {str(v).strip() for v in row if v is not None}
+            if "倉別" in cells and "商品條碼" in cells:
                 return True
         return False
     except Exception:

@@ -83,9 +83,11 @@ class JJOfficialConverter(BaseConverter):
         try:
             wb = openpyxl.load_workbook(xlsx[0], read_only=True, data_only=True)
             if "Sales" not in wb.sheetnames:
-                return [RowError(0, "sheet", xlsx[0].name, "工作表 'Sales' 不存在")]
+                return [RowError(0, "sheet", xlsx[0].name, "工作表 'Sales' 不存在",
+                                 source_file=xlsx[0].name)]
         except Exception as e:
-            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}")]
+            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}",
+                             source_file=xlsx[0].name)]
         return []
 
     def _process(self, input_files: list[Path]) -> ConversionResult:
@@ -181,7 +183,8 @@ class JJOfficialConverter(BaseConverter):
                 # 加購品：展開包數，價格用原價÷包數，附加折扣
                 if not product:
                     errors.append(RowError(row_idx, "商品貨號", raw_sku,
-                                           f"加購品 {sku!r} 在品號資料中找不到"))
+                                           f"加購品 {sku!r} 在品號資料中找不到",
+                                           source_file=order_file.name))
                     fail_count += 1
                     continue
                 pack       = int(_num(product.get("包數") or 1) or 1)
@@ -210,7 +213,8 @@ class JJOfficialConverter(BaseConverter):
                         unit_price = input_price
                     else:
                         errors.append(RowError(row_idx, "商品貨號", raw_sku,
-                                               f"品號 {sku!r} 在品號資料中找不到"))
+                                               f"品號 {sku!r} 在品號資料中找不到",
+                                               source_file=order_file.name))
                         fail_count += 1
                         continue
 

@@ -55,11 +55,13 @@ class LeageConverter(BaseConverter):
             try:
                 order = _parse_pdf(pdf_path)
             except Exception as e:
-                errors.append(RowError(row_idx, "file", pdf_path.name, f"PDF 解析失敗：{e}"))
+                errors.append(RowError(row_idx, "file", pdf_path.name, f"PDF 解析失敗：{e}",
+                                       source_file=pdf_path.name))
                 continue
 
             if not order:
-                errors.append(RowError(row_idx, "content", pdf_path.name, "無法從 PDF 擷取有效內容"))
+                errors.append(RowError(row_idx, "content", pdf_path.name, "無法從 PDF 擷取有效內容",
+                                       source_file=pdf_path.name))
                 continue
 
             # 品名比對
@@ -68,7 +70,8 @@ class LeageConverter(BaseConverter):
             product    = self._match_leage_product(norm_name, prod_names)
             if not product:
                 errors.append(RowError(row_idx, "品名", raw_name,
-                                       f"品號資料中找不到「{norm_name}」"))
+                                       f"品號資料中找不到「{norm_name}」",
+                                       source_file=pdf_path.name))
                 continue
 
             order["product"]   = product
