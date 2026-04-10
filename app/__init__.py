@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -12,7 +13,8 @@ def create_app() -> Flask:
                 static_folder=str(BASE_DIR / "static"))
 
     app.config["SECRET_KEY"] = "jjbaby-secret-2026"
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{BASE_DIR / 'data' / 'conversion.db'}"
+    default_uri = f"sqlite:///{BASE_DIR / 'data' / 'conversion.db'}"
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", default_uri)
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 

@@ -16,10 +16,6 @@ from app.utils import archive_path, output_path, SOURCE_LABELS
 from converters import detector
 
 BASE_DIR               = Path(__file__).resolve().parent.parent
-REFERENCE_CSV            = BASE_DIR / "reference" / "品號資料.csv"
-A1LEAGE_REFERENCE_CSV    = BASE_DIR / "A1樂齡官網" / "品號資料.csv"
-JJOFFICIAL_REFERENCE_CSV = BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv"
-KADOMO_REF               = BASE_DIR / "卡多摩" / "條碼對照表.json"
 OUTPUT_DIR             = BASE_DIR / "output"
 ARCHIVE_DIR            = BASE_DIR / "archive"
 
@@ -160,15 +156,9 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
         "kadomo":     KadomoConverter,
     }
 
-    YODEE_REFERENCE_CSV = BASE_DIR / "優迪通路" / "品號資料.csv"
-    ref_csv = {
-        "a1leage":    A1LEAGE_REFERENCE_CSV,
-        "jjofficial": JJOFFICIAL_REFERENCE_CSV,
-        "yodee":      YODEE_REFERENCE_CSV,
-        "kadomo":     KADOMO_REF,
-    }.get(source_type, REFERENCE_CSV)
-
-    converter = CONVERTER_MAP[source_type](ref_csv, OUTPUT_DIR)
+    from app.repositories.product_repo import ProductRepository
+    repo = ProductRepository()
+    converter = CONVERTER_MAP[source_type](repo, OUTPUT_DIR)
     result    = converter.convert(files)
 
     # 解析訂單日期

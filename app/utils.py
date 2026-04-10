@@ -5,9 +5,9 @@ from datetime import datetime
 
 SOURCE_LABELS = {
     "shopee":     "蝦皮",
-    "a1baby":     "A1婦幼展",
+    "a1baby":     "婦幼展",
     "leage":      "樂齡網",
-    "a1leage":    "A1樂齡官網",
+    "a1leage":    "樂齡官網",
     "jjofficial": "捷捷官網",
     "yodee":      "優迪通路",
     "kadomo":     "卡多摩",

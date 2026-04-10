@@ -1,6 +1,6 @@
 """
 converters/a1baby.py
-A1婦幼展訂單轉換器。
+婦幼展訂單轉換器。
 輸入：MMDD.xlsx（主檔）+ MMDD-1.xlsx（明細）
 輸出：全家取貨_MMDD.xlsx / 黑貓配送_MMDD.xlsx / 黑貓託運單_MMDD.xlsx / 黑貓印製托運單_MMDD.csv
 """

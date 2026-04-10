@@ -4,7 +4,6 @@ BaseConverter 抽象基底類，以及共用資料結構 ConversionResult、RowE
 """
 from __future__ import annotations
 
-import csv
 import io
 import re
 from abc import ABC, abstractmethod
@@ -37,7 +36,9 @@ def open_xlsx(path: Path, password: str | None = None,
                 buf = io.BytesIO()
                 office.decrypt(buf)
             buf.seek(0)
-            return openpyxl.load_workbook(buf, read_only=read_only, data_only=data_only)
+            # read_only=True 搭配 BytesIO 在 openpyxl 中無法正確偵測工作表範圍，
+            # 解密後的記憶體流必須用 read_only=False 開啟。
+            return openpyxl.load_workbook(buf, read_only=False, data_only=data_only)
         except Exception:
             raise first_err  # 解密也失敗，回傳原始錯誤
 
@@ -77,8 +78,8 @@ class ConversionResult:
 class BaseConverter(ABC):
     """所有轉換器的抽象基底類"""
 
-    def __init__(self, reference_csv: Path, output_dir: Path):
-        self.reference_csv = reference_csv
+    def __init__(self, repository, output_dir: Path):
+        self.repository    = repository
         self.output_dir    = output_dir
         self._product_map: dict[str, dict] = {}   # 品名 → row dict
         self._code_map:    dict[str, dict] = {}   # 代碼前綴 → row dict（如 "1-08" → {...}）
@@ -99,44 +100,8 @@ class BaseConverter(ABC):
 
     # ── 共用：載入品號資料 ─────────────────────────────────────────────────
     def _load_reference(self) -> None:
-        """
-        以品名為 key，建立品號資料快取。
-        支援「別名行」：同品號可有多行，別名行的空欄自動繼承主行資料。
-        主行 = 商品結帳價有值；別名行 = 商品結帳價為空，其餘空欄從主行補齊。
-        """
-        self._product_map.clear()
-        all_rows: list[dict] = []
-        main_by_no: dict[str, dict] = {}   # 品號 → 主行
-
-        with open(self.reference_csv, encoding="utf-8-sig") as f:
-            for row in csv.DictReader(f):
-                name = row.get("品名", "").strip()
-                if not name:
-                    continue
-                all_rows.append(row)
-                prod_no = row.get("品號", "").strip()
-                if row.get("商品結帳價", "").strip() and prod_no:
-                    main_by_no[prod_no] = row   # 紀錄主行
-
-        for row in all_rows:
-            name    = row["品名"].strip()
-            prod_no = row.get("品號", "").strip()
-            # 別名行：商品結帳價為空 → 從主行繼承，再覆蓋非空欄位
-            if not row.get("商品結帳價", "").strip() and prod_no in main_by_no:
-                merged = dict(main_by_no[prod_no])
-                for k, v in row.items():
-                    if v and v.strip():
-                        merged[k] = v
-                self._product_map[name] = merged
-            else:
-                self._product_map[name] = row
-
-        # 建立代碼索引（品名含「階段代碼-序號」前綴者）
-        self._code_map.clear()
-        for name, prod in self._product_map.items():
-            m = _CODE_RE.match(name)
-            if m:
-                self._code_map[m.group(1)] = prod
+        """從 ProductRepository 載入指定通路的品號資料到 in-memory cache。"""
+        self._product_map, self._code_map = self.repository.load_channel(self.source_type)
 
     def _lookup_by_name(self, query: str,
                         scope: str | None = None,

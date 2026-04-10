@@ -34,7 +34,7 @@ class ConversionLog(db.Model):
             "created_at":    self.created_at.strftime("%Y-%m-%d %H:%M"),
             "operator":      self.operator or "",
             "source_type":   self.source_type,
-            "source_label":  {"shopee": "蝦皮", "a1baby": "A1婦幼展", "leage": "樂齡網"}.get(self.source_type, self.source_type),
+            "source_label":  {"shopee": "蝦皮", "a1baby": "婦幼展", "leage": "樂齡網"}.get(self.source_type, self.source_type),
             "input_files":   self.input_files_list,
             "success_count": self.success_count,
             "fail_count":    self.fail_count,
@@ -72,3 +72,61 @@ class ConversionError(db.Model):
             "candidates":     self.candidates,
             "source_file":    self.source_file or "",
         }
+
+
+class Product(db.Model):
+    __tablename__ = "products"
+
+    sku        = db.Column(db.String(20),  primary_key=True)   # 品號
+    name       = db.Column(db.String(100), nullable=False)      # 主品名
+    category   = db.Column(db.String(50))                       # 類別
+    quantity   = db.Column(db.Integer,  default=1)              # 份數
+    pack_size  = db.Column(db.Integer)                          # 包數（nullable）
+    unit_price = db.Column(db.Float)                            # 份數價格（nullable）
+    erp_source = db.Column(db.String(50))                       # 來源（鼎新等）
+
+    aliases    = db.relationship("ProductAlias",   back_populates="product",
+                                 cascade="all, delete-orphan")
+    barcodes   = db.relationship("ProductBarcode", back_populates="product",
+                                 cascade="all, delete-orphan")
+    prices     = db.relationship("ChannelPrice",   back_populates="product",
+                                 cascade="all, delete-orphan")
+
+
+class ProductAlias(db.Model):
+    __tablename__ = "product_aliases"
+
+    id      = db.Column(db.Integer, primary_key=True)
+    sku     = db.Column(db.String(20), db.ForeignKey("products.sku"), nullable=False)
+    alias   = db.Column(db.String(100), nullable=False)
+
+    product = db.relationship("Product", back_populates="aliases")
+
+    __table_args__ = (
+        db.UniqueConstraint("sku", "alias", name="uq_sku_alias"),
+    )
+
+
+class ProductBarcode(db.Model):
+    __tablename__ = "product_barcodes"
+
+    id      = db.Column(db.Integer, primary_key=True)
+    sku     = db.Column(db.String(20), db.ForeignKey("products.sku"), nullable=False)
+    barcode = db.Column(db.String(50), nullable=False, unique=True)
+
+    product = db.relationship("Product", back_populates="barcodes")
+
+
+class ChannelPrice(db.Model):
+    __tablename__ = "channel_prices"
+
+    id      = db.Column(db.Integer, primary_key=True)
+    sku     = db.Column(db.String(20), db.ForeignKey("products.sku"), nullable=False)
+    channel = db.Column(db.String(20), nullable=False)
+    price   = db.Column(db.Float,      nullable=False)
+
+    product = db.relationship("Product", back_populates="prices")
+
+    __table_args__ = (
+        db.UniqueConstraint("sku", "channel", name="uq_sku_channel"),
+    )

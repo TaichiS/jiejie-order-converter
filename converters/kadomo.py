@@ -7,7 +7,6 @@ converters/kadomo.py
 """
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -34,9 +33,9 @@ _DATE_RE = re.compile(r"(\d{8})")  # YYYYMMDD from filename
 
 class KadomoConverter(BaseConverter):
 
-    def __init__(self, reference_csv: Path, output_dir: Path):
-        super().__init__(reference_csv, output_dir)
-        self.data_dir = reference_csv.parent  # 卡多摩/ 目錄
+    def __init__(self, repository, output_dir: Path):
+        super().__init__(repository, output_dir)
+        self.data_dir = Path(__file__).resolve().parent.parent / "卡多摩"
         self._barcode_map: dict[str, str]   = {}  # barcode → product_code
         self._price_map:   dict[str, float] = {}  # product_code → price
         self._store_map:   dict[str, str]   = {}  # warehouse_code → 店名
@@ -49,14 +48,18 @@ class KadomoConverter(BaseConverter):
     # ── 覆寫：從 JSON 載入對照表，不用 CSV ──────────────────────────────────
 
     def _load_reference(self) -> None:
-        with open(self.data_dir / "條碼對照表.json", encoding="utf-8") as f:
-            self._barcode_map = json.load(f)
-        with open(self.data_dir / "單價對照表.json", encoding="utf-8") as f:
-            self._price_map = {k: float(v) for k, v in json.load(f).items()}
-        with open(self.data_dir / "通路資料.json", encoding="utf-8") as f:
-            data = json.load(f)
+        # 條碼與定價從 Repository（已匯入 DB）
+        self._barcode_map = self.repository.load_barcodes("kadomo")
+        from app.models import ChannelPrice
+        self._price_map = {
+            cp.sku: float(cp.price)
+            for cp in ChannelPrice.query.filter_by(channel="kadomo").all()
+        }
+        # 通路資料（stores/warehouses）仍從 JSON 讀取（營運資料，不進 DB）
+        import json
+        data = json.loads((self.data_dir / "通路資料.json").read_text(encoding="utf-8"))
         self._store_map = data.get("warehouse_mapping", {})
-        self._stores = {s["店名"]: s for s in data.get("stores", [])}
+        self._stores    = {s["店名"]: s for s in data.get("stores", [])}
 
     # ── 驗證 ──────────────────────────────────────────────────────────────
 

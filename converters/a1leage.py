@@ -1,6 +1,6 @@
 """
 converters/a1leage.py
-A1樂齡官網訂單轉換器。
+樂齡官網訂單轉換器。
 輸入：後台匯出 xlsx（工作表 Orders）
 輸出：MMDD.xlsx（Sheet1, 15欄）+ MMDD黑貓.csv
 """

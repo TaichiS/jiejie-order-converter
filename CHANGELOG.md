@@ -2,6 +2,35 @@
 
 ---
 
+## v4 — 2026-04-10
+
+### 重構：品號資料統一資料庫
+
+- **新增 4 張 DB 表**：`products`、`product_aliases`、`product_barcodes`、`channel_prices`，集中管理原本散落於多個 CSV/JSON 的品號參考資料
+- **各通路獨立定價**：同一品號在不同通路（蝦皮/婦幼展/卡多摩等）可維護各自售價
+- **條碼整合**：卡多摩 `條碼對照表.json` 移入 `product_barcodes` 表
+- **新增 `ProductRepository`**（`app/repositories/product_repo.py`）：封裝所有品號查詢，Converter 不再直接讀 CSV
+- **BaseConverter / KadomoConverter**：`__init__` 改接 `ProductRepository`，移除 CSV 讀取邏輯
+- **services.py**：移除 4 個 CSV 路徑常數，改為注入 Repository
+- **Supabase 遷移準備**：`DATABASE_URL` 環境變數化，切換只需改一個設定
+- **新增匯入腳本**：`scripts/migrate_reference_data.py`（一次性 CSV/JSON → DB）
+- **新增說明文件**：`docs/品號資料庫說明.md`
+
+### 資料修正
+- 補充卡多摩缺漏條碼 4 筆（4710586222012、4710586223019、4710586223026、4710586224085）
+
+### 顯示名稱修正
+- 「A1婦幼展」→「婦幼展」、「A1樂齡官網」→「樂齡官網」（移除誤植的 A1 前綴）
+
+---
+
+## v3 — 2026-04-08
+
+### 資料修正
+- **卡多摩單價對照表**：品號 `E51010003` 單價修正 121.0 → 119.0
+
+---
+
 ## v2 — 2026-04-08
 
 ### 新功能

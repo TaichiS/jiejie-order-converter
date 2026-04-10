@@ -14,7 +14,7 @@
   <div class="accordion download-accordion" id="dlAccordion">
     {% for log in logs %}
     {% set src = log.source_type %}
-    {% set labels = {'shopee':'蝦皮','a1baby':'A1婦幼展','leage':'樂齡網'} %}
+    {% set labels = {'shopee':'蝦皮','a1baby':'婦幼展','leage':'樂齡網'} %}
     {% set files = log.output_files_list %}
     <div class="accordion-item download-item download-item-{{ src }} mb-2">
       <h2 class="accordion-header">

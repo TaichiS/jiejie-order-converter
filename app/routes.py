@@ -256,7 +256,12 @@ def alias_search():
     if not q:
         return jsonify([])
 
-    ref_path = services.A1LEAGE_REFERENCE_CSV if source_type == "a1leage" else services.REFERENCE_CSV
+    _ref_map = {
+        "a1leage": services.BASE_DIR / "A1樂齡官網" / "品號資料.csv",
+        "jjofficial": services.BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv",
+        "yodee": services.BASE_DIR / "優迪通路" / "品號資料.csv",
+    }
+    ref_path = _ref_map.get(source_type, services.BASE_DIR / "reference" / "品號資料.csv")
     results  = []
     try:
         with open(ref_path, encoding="utf-8-sig", newline="") as f:
@@ -291,7 +296,12 @@ def create_alias():
     if not alias_name or not target_no:
         return jsonify({"error": "alias_name 和 target_no 皆必填"}), 400
 
-    ref_path = services.A1LEAGE_REFERENCE_CSV if source_type == "a1leage" else services.REFERENCE_CSV
+    _ref_map2 = {
+        "a1leage": services.BASE_DIR / "A1樂齡官網" / "品號資料.csv",
+        "jjofficial": services.BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv",
+        "yodee": services.BASE_DIR / "優迪通路" / "品號資料.csv",
+    }
+    ref_path = _ref_map2.get(source_type, services.BASE_DIR / "reference" / "品號資料.csv")
     if not ref_path.exists():
         return jsonify({"error": "找不到品號資料.csv"}), 500
 
