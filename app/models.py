@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from app import db
+from app.utils import SOURCE_LABELS
 
 
 class ConversionLog(db.Model):
@@ -34,7 +35,7 @@ class ConversionLog(db.Model):
             "created_at":    self.created_at.strftime("%Y-%m-%d %H:%M"),
             "operator":      self.operator or "",
             "source_type":   self.source_type,
-            "source_label":  {"shopee": "蝦皮", "a1baby": "婦幼展", "leage": "樂齡網"}.get(self.source_type, self.source_type),
+            "source_label":  SOURCE_LABELS.get(self.source_type, self.source_type),
             "input_files":   self.input_files_list,
             "success_count": self.success_count,
             "fail_count":    self.fail_count,

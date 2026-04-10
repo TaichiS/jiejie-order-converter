@@ -11,6 +11,7 @@ SOURCE_LABELS = {
     "jjofficial": "捷捷官網",
     "yodee":      "優迪通路",
     "kadomo":     "卡多摩",
+    "licai":      "麗兒采家",
 }
 
 SOURCE_COLORS = {
@@ -21,6 +22,7 @@ SOURCE_COLORS = {
     "jjofficial": "primary",
     "yodee":      "secondary",
     "kadomo":     "dark",
+    "licai":      "warning",
 }
 
 
