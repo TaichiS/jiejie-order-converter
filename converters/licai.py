@@ -154,7 +154,7 @@ class LicaiConverter(BaseConverter):
         errors: list[RowError] = []
 
         for row_idx, row in enumerate(rows[3:], start=4):
-            if row[0] is None:
+            if not isinstance(row[0], (int, float)):  # 略過空列與標題列
                 continue
             try:
                 barcode = str(row[1]).strip() if row[1] is not None else ""
