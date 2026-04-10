@@ -35,6 +35,8 @@ def detect_each(files: list[Path]) -> dict[Path, str | None]:
             result[f] = "jjofficial"
         elif _confirm_yodee(f):
             result[f] = "yodee"
+        elif _confirm_licai(f):
+            result[f] = "licai"
         elif _confirm_kadomo(f):
             result[f] = "kadomo"
         else:
@@ -194,5 +196,25 @@ def _confirm_leage(path: Path) -> bool:
         with pdfplumber.open(path) as pdf:
             text = pdf.pages[0].extract_text() or ""
             return bool(re.search(r"樂齡生活事業|PO\d{8}", text))
+    except Exception:
+        return False
+
+
+def _confirm_licai(path: Path) -> bool:
+    """確認 xlsx 為麗兒采家個別門市採購單（row 0 有「門市：」與「門市資訊：」）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(max_row=2, values_only=True))
+        if len(rows) < 2:
+            return False
+        row0 = [str(v) if v is not None else "" for v in rows[0]]
+        row1 = [str(v) if v is not None else "" for v in rows[1]]
+        return (
+            any("門市：" in v for v in row0) and
+            any("門市資訊：" in v for v in row0) and
+            any("單號：" in v for v in row1)
+        )
     except Exception:
         return False
