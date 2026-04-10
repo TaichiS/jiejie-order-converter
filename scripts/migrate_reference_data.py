@@ -158,13 +158,11 @@ def import_licai() -> None:
         if not sku or not barcode or not name:
             continue
 
-        # Upsert Product
+        # Upsert Product（licai 使用條碼查詢，不覆蓋已有品名）
         prod = db.session.get(Product, sku)
         if prod is None:
             prod = Product(sku=sku, name=name)
             db.session.add(prod)
-        else:
-            prod.name = name
 
         # Upsert ProductBarcode（條碼全域唯一，可能已由 kadomo 匯入）
         exists_bc = ProductBarcode.query.filter_by(barcode=barcode).first()
