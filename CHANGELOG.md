@@ -2,6 +2,17 @@
 
 ---
 
+## v7 — 2026-04-10
+
+### 錯誤修正
+- **licai 標題列誤判為資料列**：跨頁重複標題列（如「麗兒采家採購單 - 濬詮」）row[0] 非 None，原本 `if row[0] is None` 無法過濾，改為 `isinstance(row[0], (int, float))`，確保只處理有序號的資料列
+- **licai channel_prices 缺漏**：D50400015-18、D50500004 未收錄於 `麗兒采家/品號資料_含條碼.csv`（源自卡多摩資料），補入 CSV 並直接在 DB 新增 licai channel_prices；同時修正條碼 4710586221589 的品號對應（D50500011 → D50500012）
+- **jjofficial reference_csv 屬性不存在**：v4 品號資料庫重構後 `self.reference_csv` 已移除，`jjofficial._process()` 仍引用，改為 `Path(__file__).parent.parent / "捷捷寶寶粥官網" / "加購品.csv"` 硬路徑
+- **jjofficial 4 個商品找不到**：D51300001、E52010018/19/20 在官網品號 CSV 的 `商品結帳價` 為空，`import_csv()` 不建 channel_prices 導致轉換時查無品號。補填 `0` 讓 DB 有佔位符，轉換時自動使用訂單原始價格
+- **import_licai 覆蓋品名導致蝦皮 code_map 斷鏈**：`import_licai()` 對已存在的 Product 執行 `prod.name = name`，將 reference CSV 的「2-S11田園雞肉燉飯」蓋成 licai CSV 的「S11田園雞肉燉飯」，破壞 `_code_map["2-S11"]` 索引，蝦皮訂單第 19 列找不到對應品號。移除品名覆蓋邏輯（licai 使用條碼查詢，不依賴品名），還原 DB 中 D50600011 品名
+
+---
+
 ## v6 — 2026-04-10
 
 ### 新功能
