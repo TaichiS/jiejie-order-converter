@@ -48,8 +48,10 @@ class LicaiConverter(BaseConverter):
 
     def _load_reference(self) -> None:
         self._barcode_map = self.repository.load_barcodes("licai")
-        from app.models import Product
-        self._name_map = {p.sku: p.name for p in Product.query.all()}
+        from app.models import Product, ChannelPrice
+        sku_set = {cp.sku for cp in ChannelPrice.query.filter_by(channel="licai").all()}
+        products = Product.query.filter(Product.sku.in_(sku_set)).all()
+        self._name_map = {p.sku: p.name for p in products}
         self._store_map = self._load_store_map()
 
     def _load_store_map(self) -> dict[str, dict]:
@@ -148,6 +150,7 @@ class LicaiConverter(BaseConverter):
         ws_out.append(HEADERS)
 
         success = 0
+        fail = 0
         errors: list[RowError] = []
 
         for row_idx, row in enumerate(rows[3:], start=4):
@@ -171,18 +174,20 @@ class LicaiConverter(BaseConverter):
                     f"條碼 {barcode!r} 查無品號",
                     source_file=f.name,
                 ))
+                fail += 1
+            else:
+                success += 1
 
             ws_out.append([
                 order_id, store_full, address, phone,
                 sku, name, qty, price, None, None,
             ])
-            success += 1
 
         for row in ws_out.iter_rows():
             for cell in row:
                 cell.font = OUTPUT_FONT
 
-        mmdd = order_date[4:] if len(order_date) == 8 else "0000"
+        mmdd = order_date[4:8] if len(order_date) == 8 else "0000"
         date_obj = (
             datetime.strptime(order_date, "%Y%m%d") if order_date else datetime.today()
         )
@@ -190,4 +195,4 @@ class LicaiConverter(BaseConverter):
         out_path = output_path(self.output_dir.parent, self.source_type, date_obj, out_name)
 
         wb_out.save(out_path)
-        return out_path, success, len(errors), errors, order_date
+        return out_path, success, fail, errors, order_date
