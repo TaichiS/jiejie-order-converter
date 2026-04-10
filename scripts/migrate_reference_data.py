@@ -41,6 +41,7 @@ CSV_SOURCES = [
 
 BARCODE_JSON      = BASE_DIR / "卡多摩" / "條碼對照表.json"
 KADOMO_PRICE_JSON = BASE_DIR / "卡多摩" / "單價對照表.json"
+LICAI_CSV         = BASE_DIR / "麗兒采家" / "品號資料_含條碼.csv"
 
 
 def import_csv(path: Path, channels: list[str]) -> None:
@@ -141,6 +142,41 @@ def import_kadomo_prices() -> None:
     db.session.flush()
 
 
+def import_licai() -> None:
+    """
+    匯入麗兒采家品號 / 條碼 / channel_prices(licai)。
+    CSV 格式：品號, 條碼, 品名（無商品結帳價欄）。
+    channel_prices 以 price=0.0 佔位（實際價格從訂單 xlsx 讀取）。
+    """
+    with open(LICAI_CSV, encoding="utf-8-sig") as f:
+        rows = list(csv.DictReader(f))
+
+    for row in rows:
+        sku     = row.get("品號", "").strip()
+        barcode = row.get("條碼", "").strip()
+        name    = row.get("品名", "").strip()
+        if not sku or not barcode or not name:
+            continue
+
+        # Upsert Product
+        prod = db.session.get(Product, sku)
+        if prod is None:
+            prod = Product(sku=sku, name=name)
+            db.session.add(prod)
+        else:
+            prod.name = name
+
+        # Upsert ProductBarcode（條碼全域唯一，可能已由 kadomo 匯入）
+        exists_bc = ProductBarcode.query.filter_by(barcode=barcode).first()
+        if not exists_bc:
+            db.session.add(ProductBarcode(sku=sku, barcode=barcode))
+
+        # Upsert ChannelPrice for licai（price=0.0 佔位）
+        _upsert_price(sku, "licai", 0.0)
+
+    db.session.flush()
+
+
 def main() -> None:
     app = create_app()
     with app.app_context():
@@ -156,6 +192,9 @@ def main() -> None:
 
         print("  匯入 卡多摩/單價對照表.json → 通路：kadomo")
         import_kadomo_prices()
+
+        print("  匯入 麗兒采家/品號資料_含條碼.csv → 通路：licai")
+        import_licai()
 
         db.session.commit()
 
