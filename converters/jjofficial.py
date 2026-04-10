@@ -101,7 +101,8 @@ class JJOfficialConverter(BaseConverter):
         cm = {str(v).strip(): i for i, v in enumerate(all_rows[0]) if v is not None}
 
         # 加購品對照表（品號 → {金額, 折扣, 包數}）
-        addon_map = _load_addon(self.reference_csv.parent / "加購品.csv")
+        _data_dir = Path(__file__).resolve().parent.parent / "捷捷寶寶粥官網"
+        addon_map = _load_addon(_data_dir / "加購品.csv")
 
         # 品號索引（品號 → product dict）
         sku_map = {
