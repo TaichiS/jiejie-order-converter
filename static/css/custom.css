@@ -229,6 +229,11 @@ body {
   padding: 0.2rem 0.6rem;
   border-radius: 20px;
 }
+.badge-licai {
+  background: #f59e0b;
+  color: #fff;
+  border-radius: 4px;
+}
 .badge-unknown {
   background: rgba(156, 163, 175, 0.18);
   color: #374151;

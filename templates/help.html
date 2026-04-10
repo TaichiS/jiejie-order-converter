@@ -12,7 +12,7 @@
         </svg>
         使用說明
       </h5>
-      <p class="text-muted small mb-0">目前支援以下 7 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
+      <p class="text-muted small mb-0">目前支援以下 8 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
     </div>
 
     <!-- 蝦皮 -->
@@ -129,6 +129,24 @@
           <tr><td class="text-muted">訂單編號</td><td>格式：<code>[倉別]-[月日]</code>，如 <code>K009-0330</code></td></tr>
           <tr><td class="text-muted">每檔獨立</td><td>不同門市的採購單輸出為不同的 xlsx 檔</td></tr>
           <tr><td class="text-muted">輸出檔案</td><td>{倉別}-{MMDD}.xlsx</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 麗兒采家 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-licai px-3 py-1" style="font-size:.85rem">麗兒采家</span>
+        <h6 class="fw-bold mb-0">麗兒采家嬰童館採購單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>已拆分的個別門市 xlsx（使用 <code>split_orders.py</code> 拆分後放入資料夾）</td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>前兩列含「門市：」、「門市資訊：」、「單號：」等標頭</td></tr>
+          <tr><td class="text-muted">對照表</td><td><code>麗兒采家/品號資料_含條碼.csv</code>、<code>通路資料.xlsx</code></td></tr>
+          <tr><td class="text-muted">訂單編號</td><td>採購單號（如 <code>UW26033008</code>），收件人為完整店名（含備注，如「中午12點後到貨」）</td></tr>
+          <tr><td class="text-muted">每檔獨立</td><td>一個門市 xlsx 輸出一個結果檔</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>{MMDD} 麗采{門市}.xlsx（如 <code>0330 麗采佳里.xlsx</code>）</td></tr>
         </tbody>
       </table>
     </div>
