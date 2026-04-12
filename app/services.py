@@ -146,6 +146,7 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
     from converters.yodee       import YodeeConverter
     from converters.kadomo      import KadomoConverter
     from converters.licai       import LicaiConverter
+    from converters.xuantu      import XuantuConverter
 
     CONVERTER_MAP = {
         "shopee":     ShopeeConverter,
@@ -156,6 +157,7 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
         "yodee":      YodeeConverter,
         "kadomo":     KadomoConverter,
         "licai":      LicaiConverter,
+        "xuantu":     XuantuConverter,
     }
 
     from app.repositories.product_repo import ProductRepository

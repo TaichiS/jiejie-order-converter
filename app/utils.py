@@ -12,6 +12,7 @@ SOURCE_LABELS = {
     "yodee":      "優迪通路",
     "kadomo":     "卡多摩",
     "licai":      "麗兒采家",
+    "xuantu":     "炫兔團購",
 }
 
 SOURCE_COLORS = {
@@ -23,6 +24,7 @@ SOURCE_COLORS = {
     "yodee":      "secondary",
     "kadomo":     "dark",
     "licai":      "warning",
+    "xuantu":     "info",
 }
 
 

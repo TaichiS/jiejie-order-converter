@@ -234,6 +234,11 @@ body {
   color: #fff;
   border-radius: 4px;
 }
+.badge-xuantu {
+  background: #0ea5e9;
+  color: #fff;
+  border-radius: 4px;
+}
 .badge-unknown {
   background: rgba(156, 163, 175, 0.18);
   color: #374151;

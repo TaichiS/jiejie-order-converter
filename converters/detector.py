@@ -189,6 +189,23 @@ def _confirm_kadomo(path: Path) -> bool:
         return False
 
 
+def _confirm_xuantu(path: Path) -> bool:
+    """確認 xlsx 為炫兔團購訂單（Sales 工作表 + 含「折抵購物金分攤」欄，捷捷官網無此欄）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        if "Sales" not in wb.sheetnames:
+            return False
+        ws  = wb["Sales"]
+        row = next(ws.iter_rows(max_row=1, values_only=True), None)
+        if not row:
+            return False
+        hdrs = {str(v).strip() for v in row if v}
+        return {"訂單號碼", "商品貨號", "全家服務編號 / 7-11 店號", "折抵購物金分攤"}.issubset(hdrs)
+    except Exception:
+        return False
+
+
 def _confirm_leage(path: Path) -> bool:
     """確認 PDF 含樂齡網文字特徵"""
     try:

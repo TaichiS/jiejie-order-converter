@@ -152,14 +152,11 @@ function renderFileList(files) {
     a1leage: ['badge-a1leage', 'A1樂齡官網'],
   };
 
-  let hasUnknown = false;
   let pendingCount = 0;
 
   listEl.innerHTML = files.map((f, i) => {
     const isArchived = f.status === 'archived';
     const src        = f.source_type;
-    const isUnknown  = !src || src === 'unknown';
-    if (isUnknown && !isArchived) hasUnknown = true;
     if (!isArchived) pendingCount++;
 
     const [badgeClass, badgeLabel] = badgeMap[src] || ['badge-unknown', '未識別'];
@@ -195,7 +192,10 @@ function renderFileList(files) {
     });
   });
 
-  unknownPanel.classList.toggle('d-none', !hasUnknown);
+  unknownPanel.classList.toggle('d-none', pendingCount === 0);
+  // 重設為自動偵測
+  const forcedSelect = document.getElementById('forcedSource');
+  if (forcedSelect) forcedSelect.value = '';
   _updateConvertButton();
 
   if (pendingCount === 0 && files.length > 0) {

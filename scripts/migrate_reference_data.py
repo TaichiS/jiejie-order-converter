@@ -37,6 +37,10 @@ CSV_SOURCES = [
         "path":     BASE_DIR / "優迪通路" / "品號資料.csv",
         "channels": ["yodee"],
     },
+    {
+        "path":     BASE_DIR / "炫兔團購" / "品號資料_方案B(炫兔團).csv",
+        "channels": ["xuantu"],
+    },
 ]
 
 BARCODE_JSON      = BASE_DIR / "卡多摩" / "條碼對照表.json"

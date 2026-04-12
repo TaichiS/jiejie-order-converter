@@ -12,7 +12,7 @@
         </svg>
         使用說明
       </h5>
-      <p class="text-muted small mb-0">目前支援以下 8 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
+      <p class="text-muted small mb-0">目前支援以下 9 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
     </div>
 
     <!-- 蝦皮 -->
@@ -147,6 +147,27 @@
           <tr><td class="text-muted">訂單編號</td><td>採購單號（如 <code>UW26033008</code>），收件人為完整店名（含備注，如「中午12點後到貨」）</td></tr>
           <tr><td class="text-muted">每檔獨立</td><td>一個門市 xlsx 輸出一個結果檔</td></tr>
           <tr><td class="text-muted">輸出檔案</td><td>{MMDD} 麗采{門市}.xlsx（如 <code>0330 麗采佳里.xlsx</code>）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 炫兔團購 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-xuantu px-3 py-1" style="font-size:.85rem">炫兔團購</span>
+        <h6 class="fw-bold mb-0">炫兔團購訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>後台匯出的 <code>.xlsx</code> 檔（全家或黑貓各一份）</td></tr>
+          <tr><td class="text-muted">工作表名稱</td><td><code>Sales</code></td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>格式與捷捷官網相近，<strong>請在掃描後手動指定轉換程式為「炫兔團購」</strong></td></tr>
+          <tr><td class="text-muted">數量轉換</td><td>原始數量 × 包數（米泥 ×4、一般品 ×2、後元系列 ×1）</td></tr>
+          <tr><td class="text-muted">價格轉換</td><td>原始價格 ÷ 包數（如 $150 ÷ 2 = $75.0）</td></tr>
+          <tr><td class="text-muted">名稱清理</td><td>自動移除商品名稱前綴「團購限定B|」</td></tr>
+          <tr><td class="text-muted">贈品處理</td><td>商品貨號為空的列（贈品）自動略過，不輸出</td></tr>
+          <tr><td class="text-muted">品號資料</td><td>集中管理於系統資料庫，通路代號 <code>xuantu</code>（獨立定價，不影響其他通路）</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD全家.xlsx ＋ MMDD黑貓.xlsx（依來源檔名自動命名）</td></tr>
         </tbody>
       </table>
     </div>
