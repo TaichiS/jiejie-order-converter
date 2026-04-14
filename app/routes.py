@@ -239,6 +239,19 @@ def download_file():
 
 # ── 別名新增 ──────────────────────────────────────────────────────────────
 
+_ALIAS_CHANNEL_MAP = {
+    "shopee":   "蝦皮",
+    "a1baby":   "婦幼展",
+    "leage":    "樂齡PDF",
+    "a1leage":  "樂齡官網",
+    "jjofficial": "寶寶粥官網",
+    "xuantu":   "炫兔團",
+    "yodee":    "吉寶通路",
+    "kadomo":   "卡多摩",
+    "licai":    "麗采",
+}
+
+
 @bp.route("/alias/search")
 def alias_search():
     """
@@ -246,32 +259,35 @@ def alias_search():
     Query: q=關鍵字, source_type=來源類型
     回傳: [{品號, 品名, 商品結帳價}]
     """
-    import csv as _csv
+    from app.models import UnifiedProduct
+
     q           = request.args.get("q", "").strip().lower()
     source_type = request.args.get("source_type", "")
     if not q:
         return jsonify([])
 
-    _ref_map = {
-        "a1leage": services.BASE_DIR / "A1樂齡官網" / "品號資料.csv",
-        "jjofficial": services.BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv",
-        "yodee": services.BASE_DIR / "優迪通路" / "品號資料.csv",
-    }
-    ref_path = _ref_map.get(source_type, services.BASE_DIR / "reference" / "品號資料.csv")
-    results  = []
-    try:
-        with open(ref_path, encoding="utf-8-sig", newline="") as f:
-            for row in _csv.DictReader(f):
-                name  = row.get("品名", "").strip()
-                no    = row.get("品號", "").strip()
-                price = row.get("商品結帳價", "").strip()
-                if not name or not no or not price:
-                    continue
-                if q in name.lower() or q in no.lower():
-                    results.append({"品號": no, "品名": name, "商品結帳價": price})
-    except Exception:
-        pass
-    return jsonify(results[:8])
+    channel = _ALIAS_CHANNEL_MAP.get(source_type)
+    if not channel:
+        return jsonify([])
+
+    rows = (
+        UnifiedProduct.query
+        .filter(
+            UnifiedProduct.channel == channel,
+            db.or_(
+                UnifiedProduct.sku.ilike(f"%{q}%"),
+                UnifiedProduct.name.ilike(f"%{q}%"),
+            ),
+        )
+        .limit(8)
+        .all()
+    )
+
+    results = []
+    for up in rows:
+        price = up.checkout_price if up.checkout_price is not None else ""
+        results.append({"品號": up.sku, "品名": up.name, "商品結帳價": str(price)})
+    return jsonify(results)
 
 
 @bp.route("/alias", methods=["POST"])
@@ -281,9 +297,10 @@ def create_alias():
     Request JSON: {alias_name: str, target_no: str, source_type: str}
 
     a1leage：alias_name 為缺少的 SKU，複製 target_no 的完整品項資料並以 alias_name 為新品號。
-    其他來源：alias_name 為缺少的品名，新增一行品號=target_no、品名=alias_name（空結帳價繼承）。
+    其他來源：alias_name 為缺少的品名，新增一行品號=target_no、品名=alias_name（繼承結帳價）。
     """
-    import csv as _csv
+    from app.models import UnifiedProduct
+
     data        = request.json or {}
     alias_name  = data.get("alias_name", "").strip()
     target_no   = data.get("target_no", "").strip()
@@ -292,44 +309,53 @@ def create_alias():
     if not alias_name or not target_no:
         return jsonify({"error": "alias_name 和 target_no 皆必填"}), 400
 
-    _ref_map2 = {
-        "a1leage": services.BASE_DIR / "A1樂齡官網" / "品號資料.csv",
-        "jjofficial": services.BASE_DIR / "捷捷寶寶粥官網" / "品號資料.csv",
-        "yodee": services.BASE_DIR / "優迪通路" / "品號資料.csv",
-    }
-    ref_path = _ref_map2.get(source_type, services.BASE_DIR / "reference" / "品號資料.csv")
-    if not ref_path.exists():
-        return jsonify({"error": "找不到品號資料.csv"}), 500
-
-    with open(ref_path, encoding="utf-8-sig", newline="") as f:
-        reader  = _csv.DictReader(f)
-        headers = reader.fieldnames or []
-        rows    = list(reader)
+    channel = _ALIAS_CHANNEL_MAP.get(source_type)
+    if not channel:
+        return jsonify({"error": "不支援的來源類型"}), 400
 
     if source_type == "a1leage":
-        # a1leage 用 SKU 查找：複製目標品項的完整資料，品號改為缺少的 SKU
-        if any(r.get("品號", "").strip() == alias_name for r in rows):
+        exists = UnifiedProduct.query.filter_by(sku=alias_name, channel=channel).first()
+        if exists:
             return jsonify({"ok": True, "message": f"品號「{alias_name}」已存在"}), 200
-        target_row = next((r for r in rows if r.get("品號", "").strip() == target_no), None)
-        if not target_row:
+        target = UnifiedProduct.query.filter_by(sku=target_no, channel=channel).first()
+        if not target:
             return jsonify({"error": f"找不到品號 {target_no}"}), 400
-        new_row = dict(target_row)
-        new_row["品號"] = alias_name
-        if "來源" in headers:
-            new_row["來源"] = "別名"
+        new_row = UnifiedProduct(
+            barcode=target.barcode,
+            sku=alias_name,
+            name=target.name,
+            category=target.category,
+            channel=channel,
+            quantity=target.quantity,
+            pack_size=target.pack_size,
+            unit_price=target.unit_price,
+            pack_price=target.pack_price,
+            checkout_price=target.checkout_price,
+            discount=target.discount,
+        )
     else:
-        # 其他來源：品名查找，新增繼承行
-        if any(r.get("品名", "").strip() == alias_name for r in rows):
+        exists = UnifiedProduct.query.filter_by(name=alias_name, channel=channel).first()
+        if exists:
             return jsonify({"ok": True, "message": f"「{alias_name}」已存在"}), 200
-        new_row = {h: "" for h in headers}
-        new_row["品號"] = target_no
-        new_row["品名"] = alias_name
-        new_row["來源"] = "別名"
+        target = UnifiedProduct.query.filter_by(sku=target_no, channel=channel).first()
+        if not target:
+            return jsonify({"error": f"找不到品號 {target_no}"}), 400
+        new_row = UnifiedProduct(
+            barcode=target.barcode,
+            sku=target_no,
+            name=alias_name,
+            category=target.category,
+            channel=channel,
+            quantity=target.quantity,
+            pack_size=target.pack_size,
+            unit_price=target.unit_price,
+            pack_price=target.pack_price,
+            checkout_price=target.checkout_price,
+            discount=target.discount,
+        )
 
-    with open(ref_path, "a", encoding="utf-8", newline="") as f:
-        writer = _csv.DictWriter(f, fieldnames=headers)
-        writer.writerow(new_row)
-
+    db.session.add(new_row)
+    db.session.commit()
     return jsonify({"ok": True, "message": f"已新增別名「{alias_name}」→ {target_no}"}), 200
 
 
@@ -427,6 +453,7 @@ def import_products():
                             unit_price=_float(row.get("份數價格")),
                             pack_price=_float(row.get("包數價格")),
                             checkout_price=_float(row.get("商品結帳價")),
+                            discount=_float(row.get("折扣")),
                         )
                         db.session.add(up)
                         success += 1

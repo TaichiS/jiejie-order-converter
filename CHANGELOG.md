@@ -23,6 +23,24 @@
 
 ---
 
+## v10 — 2026-04-14
+
+### 重構
+- **別名路由改查 UnifiedProduct**
+  - `/alias/search` 與 `/alias` (POST) 不再讀取 `reference/`、`A1樂齡官網/`、`捷捷寶寶粥官網/`、`優迪通路/` 下的 CSV，改為直接查詢 `UnifiedProduct`
+  - 移除 `_ref_map` 與 `_ref_map2` 硬路徑對照，統一由 `_ALIAS_CHANNEL_MAP` 映射 `source_type` → `channel`
+- **jjofficial 加購折扣入庫**
+  - `UnifiedProduct` 新增 `discount` 欄位
+  - `converters/jjofficial.py` 完全移除 `加購品.csv` 依賴，加購折扣直接從 `寶寶粥官網-加購` 通道的 `discount` 取得
+  - `app/repositories/product_repo.py` `_to_dict()` 回傳值新增 `"折扣"`
+  - 匯入頁面同步支援 CSV 中的 `折扣` 欄位（選填）
+
+### 整理
+- **中文資料夾歸檔**：`蝦皮`、`A1婦幼`、`A1樂齡官網`、`樂齡網(信)`、`測試資料`、`卡多摩`、`炫兔團購`、`麗兒采家`、`捷捷寶寶粥官網`、`優迪通路`、`reference` 全部移入 `legacy/`
+- 更新 `CLAUDE.md` 與 `templates/help.html` 的品號資料說明，統一標示為 `UnifiedProduct`
+
+---
+
 ## v8 — 2026-04-12
 
 ### 新功能

@@ -100,10 +100,6 @@ class JJOfficialConverter(BaseConverter):
         # 動態欄位索引（相容不同匯出版本）
         cm = {str(v).strip(): i for i, v in enumerate(all_rows[0]) if v is not None}
 
-        # 加購品折扣對照表（品號 → 折扣）—— 其餘資料改由 UnifiedProduct 查詢
-        _data_dir = Path(__file__).resolve().parent.parent / "捷捷寶寶粥官網"
-        addon_map = _load_addon_discount(_data_dir / "加購品.csv")
-
         # 品號索引（品號 → product dict）
         sku_map = {
             v.get("品號", "").strip(): v
@@ -181,7 +177,7 @@ class JJOfficialConverter(BaseConverter):
             product = sku_map.get(sku)
 
             if is_addon:
-                # 加購品：從「寶寶粥官網-加購」查價格與包數，折扣仍讀加購品.csv
+                # 加購品：從「寶寶粥官網-加購」查價格、包數與折扣
                 addon = self.repository.lookup_by_sku(sku, "寶寶粥官網-加購")
                 if not addon:
                     errors.append(RowError(row_idx, "商品貨號", raw_sku,
@@ -193,7 +189,7 @@ class JJOfficialConverter(BaseConverter):
                 output_qty = input_qty * pack
                 orig_price = _num(addon.get("份數價格") or 0)
                 unit_price = orig_price / pack if pack else orig_price
-                addon_disc = int(_num(addon_map.get(sku, {}).get("折扣") or 0))
+                addon_disc = int(_num(addon.get("折扣") or 0))
             else:
                 addon_disc = 0
                 pack = int(_num(product.get("包數") or 0) or 0) if product else 0
@@ -346,28 +342,6 @@ def _write_csv(base_dir: Path, source_type: str, date_obj: datetime,
 
 
 # ── 工具 ─────────────────────────────────────────────────────────────────
-
-def _load_addon_discount(path: Path) -> dict[str, dict]:
-    """載入加購品.csv，回傳 {品號: {折扣}}；其餘資料已統一至 UnifiedProduct。"""
-    result: dict[str, dict] = {}
-    if not path.exists():
-        return result
-    try:
-        with open(path, encoding="utf-8-sig") as f:
-            reader = csv.reader(f)
-            header = next(reader, None)
-            if not header:
-                return result
-            for row in reader:
-                if len(row) < 6 or not row[0].strip():
-                    continue
-                result[row[0].strip()] = {
-                    "折扣": row[5].strip() if len(row) > 5 else "",
-                }
-    except Exception:
-        pass
-    return result
-
 
 def _parse_address(raw: str) -> str | None:
     """

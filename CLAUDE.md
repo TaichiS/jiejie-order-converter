@@ -34,7 +34,7 @@ find archive -type f -delete
 
 - **Flask** 網頁應用，port 5099
 - **converters/** 各來源轉換器，繼承 `BaseConverter`
-- **品號資料**：`reference/品號資料.csv`（蝦皮/婦幼/樂齡網）、`A1樂齡官網/品號資料.csv`（a1leage）、`優迪通路/品號資料.csv`（yodee）、`捷捷寶寶粥官網/品號資料.csv`（jjofficial）
+- **品號資料**：統一由 `UnifiedProduct`（SQLite）管理，透過 `/admin/import-products` 上傳 `品號資料統整.csv` 覆蓋。舊 CSV 已移至 `legacy/`。
 - **輸出**：`output/{source_type}/{YYYY-MM}/`
 - **歸檔**：`archive/{source_type}/{YYYY-MM}/`
 
@@ -42,12 +42,12 @@ find archive -type f -delete
 
 | 代號 | 名稱 | 輸入 | 品號資料 |
 |------|------|------|----------|
-| shopee | 蝦皮 | Order.toship.*.xlsx（可加密） | reference/ |
-| a1baby | A1婦幼展 | MMDD.xlsx + MMDD-1.xlsx | reference/ |
-| leage | 樂齡網 | PDF | reference/ |
-| a1leage | A1樂齡官網 | *.xlsx（Orders 工作表） | A1樂齡官網/ |
-| jjofficial | 捷捷官網 | *.xlsx（Sales 工作表） | 捷捷寶寶粥官網/ |
-| yodee | 優迪通路 | *.xlsx（含標頭列「訂單編號」） | 優迪通路/ |
+| shopee | 蝦皮 | Order.toship.*.xlsx（可加密） | UnifiedProduct |
+| a1baby | A1婦幼展 | MMDD.xlsx + MMDD-1.xlsx | UnifiedProduct |
+| leage | 樂齡網 | PDF | UnifiedProduct |
+| a1leage | A1樂齡官網 | *.xlsx（Orders 工作表） | UnifiedProduct |
+| jjofficial | 捷捷官網 | *.xlsx（Sales 工作表） | UnifiedProduct |
+| yodee | 優迪通路 | *.xlsx（含標頭列「訂單編號」） | UnifiedProduct |
 
 ## 關鍵架構決策
 

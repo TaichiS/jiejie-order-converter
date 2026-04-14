@@ -119,5 +119,6 @@ def _to_dict(up: UnifiedProduct) -> dict:
         "份數價格":   str(up.unit_price) if up.unit_price is not None else "",
         "包數價格":   str(up.pack_price) if up.pack_price is not None else "",
         "商品結帳價": str(up.checkout_price) if up.checkout_price is not None else "",
+        "折扣":       str(up.discount) if up.discount is not None else "",
         "來源":       up.channel or "",
     }

@@ -148,6 +148,7 @@ class UnifiedProduct(db.Model):
     unit_price     = db.Column(db.Float)       # 份數價格
     pack_price     = db.Column(db.Float)       # 包數價格
     checkout_price = db.Column(db.Float)       # 商品結帳價
+    discount       = db.Column(db.Float)       # 加購折扣
 
     __table_args__ = (
         db.Index("ix_unified_products_sku_channel", "sku", "channel"),
