@@ -100,9 +100,9 @@ class JJOfficialConverter(BaseConverter):
         # 動態欄位索引（相容不同匯出版本）
         cm = {str(v).strip(): i for i, v in enumerate(all_rows[0]) if v is not None}
 
-        # 加購品對照表（品號 → {金額, 折扣, 包數}）
+        # 加購品折扣對照表（品號 → 折扣）—— 其餘資料改由 UnifiedProduct 查詢
         _data_dir = Path(__file__).resolve().parent.parent / "捷捷寶寶粥官網"
-        addon_map = _load_addon(_data_dir / "加購品.csv")
+        addon_map = _load_addon_discount(_data_dir / "加購品.csv")
 
         # 品號索引（品號 → product dict）
         sku_map = {
@@ -181,19 +181,19 @@ class JJOfficialConverter(BaseConverter):
             product = sku_map.get(sku)
 
             if is_addon:
-                # 加購品：展開包數，價格用原價÷包數，附加折扣
-                if not product:
+                # 加購品：從「寶寶粥官網-加購」查價格與包數，折扣仍讀加購品.csv
+                addon = self.repository.lookup_by_sku(sku, "寶寶粥官網-加購")
+                if not addon:
                     errors.append(RowError(row_idx, "商品貨號", raw_sku,
-                                           f"加購品 {sku!r} 在品號資料中找不到",
+                                           f"加購品 {sku!r} 在加購品資料中找不到",
                                            source_file=order_file.name))
                     fail_count += 1
                     continue
-                pack       = int(_num(product.get("包數") or 1) or 1)
+                pack       = int(_num(addon.get("包數") or 1) or 1)
                 output_qty = input_qty * pack
-                addon      = addon_map.get(sku, {})
-                orig_price = _num(addon.get("金額") or product.get("份數價格") or 0)
+                orig_price = _num(addon.get("份數價格") or 0)
                 unit_price = orig_price / pack if pack else orig_price
-                addon_disc = int(_num(addon.get("折扣") or 0))
+                addon_disc = int(_num(addon_map.get(sku, {}).get("折扣") or 0))
             else:
                 addon_disc = 0
                 pack = int(_num(product.get("包數") or 0) or 0) if product else 0
@@ -347,8 +347,8 @@ def _write_csv(base_dir: Path, source_type: str, date_obj: datetime,
 
 # ── 工具 ─────────────────────────────────────────────────────────────────
 
-def _load_addon(path: Path) -> dict[str, dict]:
-    """載入加購品.csv，回傳 {品號: {金額, 折扣, 包數, 份數價格}}"""
+def _load_addon_discount(path: Path) -> dict[str, dict]:
+    """載入加購品.csv，回傳 {品號: {折扣}}；其餘資料已統一至 UnifiedProduct。"""
     result: dict[str, dict] = {}
     if not path.exists():
         return result
@@ -358,16 +358,11 @@ def _load_addon(path: Path) -> dict[str, dict]:
             header = next(reader, None)
             if not header:
                 return result
-            # 動態解析欄位位置（header 第一欄為空，跳過 BOM）
-            # 固定格式：品號, 品名, (空), 金額, 加購金額, 折扣, 包數, 份數價格
             for row in reader:
                 if len(row) < 6 or not row[0].strip():
                     continue
                 result[row[0].strip()] = {
-                    "金額":   row[3].strip() if len(row) > 3 else "",
-                    "折扣":   row[5].strip() if len(row) > 5 else "",
-                    "包數":   row[6].strip() if len(row) > 6 else "",
-                    "份數價格": row[7].strip() if len(row) > 7 else "",
+                    "折扣": row[5].strip() if len(row) > 5 else "",
                 }
     except Exception:
         pass

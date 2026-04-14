@@ -131,3 +131,24 @@ class ChannelPrice(db.Model):
     __table_args__ = (
         db.UniqueConstraint("sku", "channel", name="uq_sku_channel"),
     )
+
+
+class UnifiedProduct(db.Model):
+    """統一品號資料表：對應品號資料統整.csv"""
+    __tablename__ = "unified_products"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    barcode        = db.Column(db.String(50),  nullable=True,  index=True)
+    sku            = db.Column(db.String(20),  nullable=False, index=True)
+    name           = db.Column(db.String(100), nullable=False)
+    category       = db.Column(db.String(50))
+    channel        = db.Column(db.String(50),  nullable=False, index=True)
+    quantity       = db.Column(db.Integer,     default=1)
+    pack_size      = db.Column(db.Integer)
+    unit_price     = db.Column(db.Float)       # 份數價格
+    pack_price     = db.Column(db.Float)       # 包數價格
+    checkout_price = db.Column(db.Float)       # 商品結帳價
+
+    __table_args__ = (
+        db.Index("ix_unified_products_sku_channel", "sku", "channel"),
+    )

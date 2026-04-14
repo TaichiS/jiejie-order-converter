@@ -4,6 +4,7 @@ Flask 路由：掃描、轉換、報表、下載、設定。
 """
 from __future__ import annotations
 
+import csv
 import io
 import json
 import queue
@@ -48,7 +49,6 @@ def _save_config(data: dict) -> None:
 def index():
     config = _load_config()
     return render_template("index.html",
-                           default_folder=config.get("default_folder", ""),
                            default_operator=config.get("default_operator", ""),
                            source_labels=SOURCE_LABELS)
 
@@ -88,10 +88,6 @@ def scan():
         return jsonify({"error": "請輸入資料夾路徑"}), 400
     try:
         results = services.scan_folder(folder)
-        # 自動記住最後使用的資料夾
-        config = _load_config()
-        config["default_folder"] = folder
-        _save_config(config)
         return jsonify({"files": results, "folder": folder})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -372,3 +368,194 @@ def error_detail_data(log_id: int):
 @bp.route("/help")
 def help_page():
     return render_template("help.html")
+
+
+# ── 品號資料匯入 ──────────────────────────────────────────────────────────
+
+@bp.route("/admin/import-products", methods=["GET", "POST"])
+def import_products():
+    """上傳品號資料統整.csv，全表覆蓋 unified_products。"""
+    from app.models import UnifiedProduct
+
+    result = None
+    if request.method == "POST":
+        file = request.files.get("csv_file")
+        if not file or file.filename == "":
+            result = {"success": 0, "errors": 1, "error_messages": ["未選擇檔案"]}
+        else:
+            try:
+                # 清空現有資料（先不 commit，與後續匯入在同一筆交易中）
+                UnifiedProduct.query.delete()
+
+                stream = io.StringIO(file.stream.read().decode("utf-8-sig"))
+                reader = csv.DictReader(stream)
+                success = 0
+                errors = 0
+                error_messages: list[str] = []
+
+                for row in reader:
+                    try:
+                        barcode = (row.get("條碼") or "").strip()
+                        sku = (row.get("品號") or "").strip()
+                        name = (row.get("品名") or "").strip()
+                        channel = (row.get("通路") or "").strip()
+
+                        if not sku or not name or not channel:
+                            errors += 1
+                            continue
+
+                        def _float(val):
+                            try:
+                                return float(val.strip()) if val else None
+                            except (ValueError, TypeError):
+                                return None
+
+                        def _int(val):
+                            try:
+                                return int(float(val.strip())) if val else None
+                            except (ValueError, TypeError):
+                                return None
+
+                        up = UnifiedProduct(
+                            barcode=barcode or None,
+                            sku=sku,
+                            name=name,
+                            category=(row.get("類別") or "").strip() or None,
+                            channel=channel,
+                            quantity=_int(row.get("份數")) or 1,
+                            pack_size=_int(row.get("包數")),
+                            unit_price=_float(row.get("份數價格")),
+                            pack_price=_float(row.get("包數價格")),
+                            checkout_price=_float(row.get("商品結帳價")),
+                        )
+                        db.session.add(up)
+                        success += 1
+                    except Exception as e:
+                        errors += 1
+                        error_messages.append(f"第 {success + errors} 行錯誤：{e}")
+
+                if errors:
+                    db.session.rollback()
+                    error_messages.insert(0, "資料未更新，請修正 CSV 後重新匯入")
+                else:
+                    # 補齊條碼：舊 product_barcodes 表仍有部分 CSV 缺少的條碼
+                    try:
+                        from app.models import ProductBarcode
+                        barcode_map: dict[str, str] = {}
+                        for pb in ProductBarcode.query.all():
+                            if pb.sku not in barcode_map:
+                                barcode_map[pb.sku] = pb.barcode
+                        for sku, barcode in barcode_map.items():
+                            UnifiedProduct.query.filter(
+                                UnifiedProduct.sku == sku,
+                                db.or_(
+                                    UnifiedProduct.barcode.is_(None),
+                                    UnifiedProduct.barcode == "",
+                                ),
+                            ).update({"barcode": barcode}, synchronize_session=False)
+                    except Exception:
+                        pass
+
+                    db.session.commit()
+
+                result = {
+                    "success": success,
+                    "errors": errors,
+                    "error_messages": error_messages[:10],
+                }
+            except Exception as e:
+                db.session.rollback()
+                result = {"success": 0, "errors": 1, "error_messages": [f"匯入失敗：{e}"]}
+
+    return render_template("import_products.html", result=result)
+
+
+@bp.route("/admin/clear-data", methods=["POST"])
+def clear_data():
+    """清除所有轉換資料與輸出檔案（保留統一品號表）。"""
+    try:
+        ConversionError.query.delete()
+        ConversionLog.query.delete()
+        db.session.commit()
+
+        # 刪除 output/ 與 archive/ 下的所有檔案
+        for folder in (BASE_DIR / "output", BASE_DIR / "archive"):
+            if folder.exists():
+                for f in folder.rglob("*"):
+                    if f.is_file():
+                        f.unlink()
+
+        return jsonify({"ok": True, "message": "已清除轉換資料與輸出檔案"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@bp.route("/admin/download-product-template")
+def download_product_template():
+    """下載品號資料統整.csv 原檔。"""
+    csv_path = BASE_DIR / "品號資料統整.csv"
+    if not csv_path.exists():
+        abort(404)
+    return send_file(
+        csv_path,
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name="品號資料統整.csv",
+    )
+
+
+@bp.route("/admin/product-search")
+def product_search():
+    """
+    品號查詢 API。
+    Query: q=關鍵字
+    回傳: [{品號, 品名, 類別, 通路, 份數, 包數, 份數價格, 包數價格, 商品結帳價}]
+    """
+    from app.models import UnifiedProduct
+
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
+
+    query = UnifiedProduct.query
+    # 優先精確比對品號或條碼，再模糊比對品名
+    try:
+        results = (
+            query.filter(
+                db.or_(
+                    UnifiedProduct.sku == q,
+                    UnifiedProduct.barcode == q,
+                    UnifiedProduct.name.contains(q),
+                )
+            )
+            .order_by(
+                db.case(
+                    (UnifiedProduct.sku == q, 0),
+                    (UnifiedProduct.barcode == q, 1),
+                    else_=2,
+                )
+            )
+            .limit(50)
+            .all()
+        )
+    except Exception:
+        results = []
+
+    return jsonify(
+        [
+            {
+                "條碼": r.barcode or "",
+                "品號": r.sku,
+                "品名": r.name,
+                "類別": r.category or "",
+                "通路": r.channel,
+                "份數": r.quantity,
+                "包數": r.pack_size or "",
+                "份數價格": r.unit_price or "",
+                "包數價格": r.pack_price or "",
+                "商品結帳價": r.checkout_price or "",
+            }
+            for r in results
+        ]
+    )

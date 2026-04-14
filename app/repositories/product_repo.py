@@ -1,93 +1,123 @@
 """
 app/repositories/product_repo.py
 ProductRepository：封裝所有品號查詢邏輯。
-呼叫端（Converter）只看這個介面，不直接操作 ORM 或 CSV。
-切換 Supabase：只改 DATABASE_URI，此類別不需改動。
+本次改為以 unified_products 為單一事實來源。
 """
 from __future__ import annotations
 
 import re
-from difflib import get_close_matches
 
-from sqlalchemy.orm import joinedload
-
-from app.models import Product, ProductAlias, ProductBarcode, ChannelPrice
+from app.models import UnifiedProduct
 
 _CODE_RE = re.compile(r'^(\d+[A-Z]?-[A-Z]?\d+)')
+
+
+# CSV 通路名稱 → converter source_type 的對應
+# 注意：jjofficial 一般商品只對應「寶寶粥官網」，加購品需額外查詢「寶寶粥官網-加購」
+_SOURCE_TYPE_TO_CHANNELS: dict[str, list[str]] = {
+    "shopee":     ["蝦皮"],
+    "a1baby":     ["婦幼展"],
+    "leage":      ["樂齡PDF"],
+    "a1leage":    ["樂齡官網"],
+    "jjofficial": ["寶寶粥官網"],
+    "xuantu":     ["炫兔團"],
+    "yodee":      ["吉寶通路"],
+    "kadomo":     ["卡多摩"],
+    "licai":      ["麗采"],
+}
 
 
 class ProductRepository:
     """
     提供 Converter 所需的品號查詢方法。
-    所有方法回傳與原 CSV row dict 相容的 dict，
-    確保現有 Converter 邏輯無需改動。
+    所有方法回傳與原 CSV row dict 相容的 dict。
     """
 
-    def load_channel(self, channel: str) -> tuple[dict[str, dict], dict[str, dict]]:
+    def load_channel(self, source_type: str) -> tuple[dict[str, dict], dict[str, dict]]:
         """
         載入指定通路的所有品號資料，回傳 (product_map, code_map)。
-        product_map: 品名（含別名）→ row_dict
-        code_map:    代碼前綴（如 "1-08"）→ row_dict
-        row_dict 格式與舊 CSV DictReader 一致：
-          {'品號','品名','類別','份數','包數','份數價格','商品結帳價','來源'}
+        product_map: 品名 → row_dict
+        code_map:    代碼前綴 → row_dict
         """
-        price_rows = ChannelPrice.query.filter_by(channel=channel).all()
-        sku_set    = {cp.sku for cp in price_rows}
-        price_map  = {cp.sku: cp.price for cp in price_rows}
+        channels = _SOURCE_TYPE_TO_CHANNELS.get(source_type, [])
+        if not channels:
+            return {}, {}
 
-        products = (
-            Product.query
-            .filter(Product.sku.in_(sku_set))
-            .options(joinedload(Product.aliases))
-            .all()
-        )
+        rows = UnifiedProduct.query.filter(
+            UnifiedProduct.channel.in_(channels)
+        ).all()
 
         product_map: dict[str, dict] = {}
         code_map:    dict[str, dict] = {}
 
-        for prod in products:
-            price = price_map.get(prod.sku, 0)
-            row   = _to_dict(prod, price)
-            product_map[prod.name] = row
-            for alias_obj in prod.aliases:
-                product_map[alias_obj.alias] = row
-            m = _CODE_RE.match(prod.name)
+        for up in rows:
+            row = _to_dict(up)
+            product_map[up.name] = row
+            m = _CODE_RE.match(up.name)
             if m:
                 code_map[m.group(1)] = row
 
         return product_map, code_map
 
-    def load_barcodes(self, channel: str) -> dict[str, str]:
+    def load_barcodes(self, source_type: str) -> dict[str, str]:
         """
         回傳指定通路的條碼對照表：barcode → sku。
-        目前只有 kadomo 通路使用。
+        目前只有 kadomo、licai 通路使用。
         """
-        sku_set = {
-            cp.sku
-            for cp in ChannelPrice.query.filter_by(channel=channel).all()
-        }
-        return {
-            bc.barcode: bc.sku
-            for bc in ProductBarcode.query.filter(
-                ProductBarcode.sku.in_(sku_set)
-            ).all()
-        }
+        channels = _SOURCE_TYPE_TO_CHANNELS.get(source_type, [])
+        if not channels:
+            return {}
 
-    def get_price(self, sku: str, channel: str) -> float:
+        rows = (
+            UnifiedProduct.query
+            .filter(
+                UnifiedProduct.channel.in_(channels),
+                UnifiedProduct.barcode.isnot(None),
+                UnifiedProduct.barcode != "",
+            )
+            .all()
+        )
+        return {up.barcode: up.sku for up in rows}
+
+    def get_price(self, sku: str, source_type: str) -> float:
         """回傳指定通路的品號單價，找不到回傳 0.0。"""
-        cp = ChannelPrice.query.filter_by(sku=sku, channel=channel).first()
-        return float(cp.price) if cp else 0.0
+        channels = _SOURCE_TYPE_TO_CHANNELS.get(source_type, [])
+        if not channels:
+            return 0.0
+
+        up = (
+            UnifiedProduct.query
+            .filter(
+                UnifiedProduct.sku == sku,
+                UnifiedProduct.channel.in_(channels),
+            )
+            .first()
+        )
+        return float(up.checkout_price) if up and up.checkout_price is not None else 0.0
+
+    def lookup_by_sku(self, sku: str, channel: str) -> dict | None:
+        """
+        直接依 sku + channel 查詢單一品號資料。
+        供 jjofficial 查詢「寶寶粥官網-加購」等子通路使用。
+        """
+        up = (
+            UnifiedProduct.query
+            .filter_by(sku=sku, channel=channel)
+            .first()
+        )
+        return _to_dict(up) if up else None
 
 
-def _to_dict(prod: Product, price: float) -> dict:
-    """將 Product ORM 物件轉為與 CSV row 相容的 dict。"""
+def _to_dict(up: UnifiedProduct) -> dict:
+    """將 UnifiedProduct ORM 物件轉為與舊 CSV row 相容的 dict。"""
     return {
-        "品號":       prod.sku,
-        "品名":       prod.name,
-        "類別":       prod.category or "",
-        "份數":       str(prod.quantity or 1),
-        "包數":       str(prod.pack_size) if prod.pack_size else "",
-        "份數價格":   str(prod.unit_price) if prod.unit_price else "",
-        "商品結帳價": str(price),
-        "來源":       prod.erp_source or "",
+        "品號":       up.sku,
+        "品名":       up.name,
+        "類別":       up.category or "",
+        "份數":       str(up.quantity or 1),
+        "包數":       str(up.pack_size) if up.pack_size is not None else "",
+        "份數價格":   str(up.unit_price) if up.unit_price is not None else "",
+        "包數價格":   str(up.pack_price) if up.pack_price is not None else "",
+        "商品結帳價": str(up.checkout_price) if up.checkout_price is not None else "",
+        "來源":       up.channel or "",
     }

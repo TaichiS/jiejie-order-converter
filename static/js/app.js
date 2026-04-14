@@ -126,6 +126,7 @@ async function doScan() {
 
     _scanResult = data;
     renderFileList(data.files);
+    try { localStorage.setItem('default_folder', folder); } catch(e) {}
   } catch (e) {
     showToast('掃描發生錯誤：' + e.message, 'danger');
   } finally {
@@ -378,11 +379,21 @@ async function _fdShowDecision(msg) {
   // 錯誤列表
   const listEl = document.getElementById('fdErrorList');
   if (errors.length) {
-    listEl.innerHTML = errors.map(e => `
-      <div class="d-flex gap-2 py-1 border-bottom" style="border-color:rgba(0,0,0,.06)!important">
-        <span class="text-muted" style="flex-shrink:0">第${e.row_number}列</span>
-        <span class="text-truncate" style="color:#c2410c" title="${e.reason}">${e.reason}</span>
-      </div>`).join('');
+    listEl.innerHTML = errors.map(e => {
+      const fileName = e.source_file ? e.source_file.replace(/^.*[\\/]/, '') : '';
+      const orig = e.original_value ? `（${e.original_value}）` : '';
+      return `
+      <div class="py-2 border-bottom" style="border-color:rgba(0,0,0,.06)!important">
+        <div class="d-flex gap-2 align-items-start">
+          <span class="badge bg-light text-dark border" style="flex-shrink:0;font-size:.75rem">${fileName || '未知檔案'}</span>
+          <span class="text-muted" style="flex-shrink:0">第${e.row_number}列</span>
+        </div>
+        <div class="mt-1" style="color:#c2410c;font-size:.9rem" title="${e.reason}">
+          <span class="fw-semibold">${orig}</span>
+          <span>${e.reason}</span>
+        </div>
+      </div>`;
+    }).join('');
   } else {
     listEl.innerHTML = '';
   }
@@ -549,6 +560,15 @@ function initCountUpObserver() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initCountUpObserver();
+
+  // 從 localStorage 還原上次的資料夾路徑與執行者
+  try {
+    const savedFolder = localStorage.getItem('default_folder');
+    if (savedFolder) {
+      const folderInput = document.getElementById('folderInput');
+      if (folderInput) folderInput.value = savedFolder;
+    }
+  } catch(e) {}
 
   // Enter 鍵觸發掃描
   document.getElementById('folderInput')?.addEventListener('keydown', e => {

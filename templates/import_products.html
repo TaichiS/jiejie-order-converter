@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}匯入品號資料 - 捷捷寶寶粥 訂單轉換系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-10 col-lg-8">
+
+    <!-- 品號查詢 -->
+    <div class="glass-card p-4 mb-4">
+      <h5 class="fw-bold mb-3" style="color:#c2410c">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-3px">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zM9.5 14C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+        品號查詢
+      </h5>
+      <div class="input-group mb-3">
+        <input type="text" id="searchInput" class="form-control" placeholder="輸入品號、品名或條碼..." autocomplete="off">
+        <button class="btn btn-glass-primary" type="button" onclick="doSearch()">查詢</button>
+      </div>
+      <div id="searchResultArea" class="table-responsive" style="display:none">
+        <table class="table table-sm table-hover align-middle" style="font-size:.9rem">
+          <thead class="table-light">
+            <tr>
+              <th>品號</th>
+              <th>品名</th>
+              <th>通路</th>
+              <th class="text-end">份數</th>
+              <th class="text-end">包數</th>
+              <th class="text-end">份數價格</th>
+              <th class="text-end">包數價格</th>
+              <th class="text-end">結帳價</th>
+            </tr>
+          </thead>
+          <tbody id="searchResultBody"></tbody>
+        </table>
+      </div>
+      <div id="searchNoResult" class="text-muted small" style="display:none">找不到符合的品號資料。</div>
+    </div>
+
+    <!-- 匯入區塊 -->
+    <div class="glass-card p-4">
+      <h4 class="fw-bold mb-3" style="color:#c2410c">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-3px">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/>
+          <path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        匯入品號資料
+      </h4>
+      <p class="text-muted small mb-3">
+        請先下載目前的原檔，修改後再上傳。系統會先清空現有統一品號表，再重新匯入全部資料。
+      </p>
+
+      <div class="mb-4">
+        <a href="{{ url_for('main.download_product_template') }}" class="btn btn-outline-secondary btn-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="me-1" style="vertical-align:-2px">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          下載原檔（品號資料統整.csv）
+        </a>
+      </div>
+
+      {% if result %}
+        <div class="alert alert-{{ 'success' if result.success > 0 and result.errors == 0 else 'info' }} glass-card">
+          <div class="fw-semibold mb-1">匯入結果</div>
+          <div class="small">成功筆數：<strong>{{ result.success }}</strong></div>
+          <div class="small">錯誤筆數：<strong>{{ result.errors }}</strong></div>
+          {% if result.error_messages %}
+            <hr class="my-2">
+            <ul class="small mb-0">
+              {% for msg in result.error_messages %}
+                <li>{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="csvFile" class="form-label fw-semibold">選擇 CSV 檔案</label>
+          <input class="form-control" type="file" id="csvFile" name="csv_file" accept=".csv" required>
+        </div>
+        <div class="d-grid">
+          <button type="submit" class="btn btn-glass-primary">開始匯入</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 資料清除 -->
+    <div class="glass-card p-4 mt-4" style="border-left:3px solid #ef4444">
+      <h5 class="fw-bold mb-3" style="color:#991b1b">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="me-2" style="vertical-align:-3px">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+        危險區域
+      </h5>
+      <p class="text-muted small mb-3">此操作會清空轉換記錄、錯誤明細，並刪除 output/ 與 archive/ 中的所有檔案。<strong>不會</strong>清空統一品號表。此動作無法還原。</p>
+      <button type="button" class="btn btn-outline-danger btn-sm" onclick="doClearData()">清除所有資料</button>
+      <div id="clearResult" class="mt-2 small" style="display:none"></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const searchInput = document.getElementById('searchInput');
+searchInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doSearch();
+});
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) return;
+  const tbody = document.getElementById('searchResultBody');
+  const area = document.getElementById('searchResultArea');
+  const noResult = document.getElementById('searchNoResult');
+  tbody.innerHTML = '';
+  area.style.display = 'none';
+  noResult.style.display = 'none';
+
+  try {
+    const resp = await fetch('/admin/product-search?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    if (data.length === 0) {
+      noResult.style.display = 'block';
+      return;
+    }
+    data.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="font-monospace">${escapeHtml(r['品號'])}</td>
+        <td>${escapeHtml(r['品名'])}</td>
+        <td><span class="badge bg-light text-dark border">${escapeHtml(r['通路'])}</span></td>
+        <td class="text-end">${r['份數']}</td>
+        <td class="text-end">${r['包數'] ?? '-'}</td>
+        <td class="text-end">${formatNum(r['份數價格'])}</td>
+        <td class="text-end">${formatNum(r['包數價格'])}</td>
+        <td class="text-end">${formatNum(r['商品結帳價'])}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    area.style.display = 'block';
+  } catch (e) {
+    noResult.textContent = '查詢失敗，請稍後再試。';
+    noResult.style.display = 'block';
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatNum(v) {
+  if (v === '' || v === null || v === undefined) return '-';
+  const n = Number(v);
+  if (Number.isNaN(n)) return '-';
+  return Number.isInteger(n) ? n.toString() : n.toFixed(2);
+}
+
+async function doClearData() {
+  if (!confirm('確定要清除所有資料嗎？此動作無法還原。')) return;
+  try {
+    const resp = await fetch('/admin/clear-data', {method: 'POST'});
+    const data = await resp.json();
+    const el = document.getElementById('clearResult');
+    el.style.display = 'block';
+    if (data.ok) {
+      el.className = 'mt-2 small text-success';
+      el.textContent = data.message;
+    } else {
+      el.className = 'mt-2 small text-danger';
+      el.textContent = '清除失敗：' + data.message;
+    }
+  } catch (e) {
+    const el = document.getElementById('clearResult');
+    el.style.display = 'block';
+    el.className = 'mt-2 small text-danger';
+    el.textContent = '清除失敗：' + e.message;
+  }
+}
+</script>
+{% endblock %}
