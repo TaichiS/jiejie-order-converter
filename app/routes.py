@@ -61,8 +61,17 @@ def browse_path():
     if not path_str:
         path_str = _load_config().get("default_folder", "") or str(Path.home())
     current = Path(path_str)
+
+    # 若路徑不存在，向上尋找最近存在的父目錄；皆不存在則 fallback 到使用者家目錄
     if not current.exists() or not current.is_dir():
-        return jsonify({"error": "路徑不存在"}), 400
+        fallback = current
+        while fallback and not (fallback.exists() and fallback.is_dir()):
+            parent = fallback.parent
+            if parent == fallback:          # 已到根目錄
+                break
+            fallback = parent
+        current = fallback if fallback.exists() and fallback.is_dir() else Path.home()
+
     try:
         dirs = sorted(
             [{"name": d.name, "path": str(d)} for d in current.iterdir()
@@ -87,8 +96,12 @@ def scan():
     if not folder:
         return jsonify({"error": "請輸入資料夾路徑"}), 400
     try:
-        results = services.scan_folder(folder)
-        return jsonify({"files": results, "folder": folder})
+        results, fallback_folder = services.scan_folder(folder)
+        return jsonify({
+            "files": results,
+            "folder": folder,
+            "fallback_folder": fallback_folder,
+        })
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -246,6 +259,7 @@ _ALIAS_CHANNEL_MAP = {
     "a1leage":  "樂齡官網",
     "jjofficial": "寶寶粥官網",
     "xuantu":   "炫兔團",
+    "tuanma":   "其他團媽",
     "yodee":    "吉寶通路",
     "kadomo":   "卡多摩",
     "licai":    "麗采",

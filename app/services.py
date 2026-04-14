@@ -22,15 +22,24 @@ ARCHIVE_DIR            = BASE_DIR / "archive"
 
 # ── 資料夾掃描 ────────────────────────────────────────────────────────────
 
-def scan_folder(folder: str) -> list[dict]:
+def scan_folder(folder: str) -> tuple[list[dict], str | None]:
     """
-    掃描資料夾，回傳每個檔案的偵測結果列表。
-    格式：[{name, path, source_type, source_label, status}]
+    掃描資料夾，回傳每個檔案的偵測結果列表，以及是否發生了 fallback 路徑。
+    格式：([{name, path, source_type, source_label, status}], fallback_folder | None)
     status: 'pending' | 'archived' | 'unknown'
     """
     folder_path = Path(folder)
+    original_path = folder_path
+
+    # 若路徑不存在，向上尋找最近存在的父目錄
     if not folder_path.is_dir():
-        raise ValueError(f"資料夾不存在：{folder}")
+        fallback = folder_path
+        while fallback and not fallback.is_dir():
+            parent = fallback.parent
+            if parent == fallback:          # 已到根目錄
+                break
+            fallback = parent
+        folder_path = fallback if fallback.is_dir() else Path.home()
 
     # 收集所有 xlsx / pdf 檔案
     all_files = sorted(
@@ -40,7 +49,7 @@ def scan_folder(folder: str) -> list[dict]:
     )
 
     if not all_files:
-        return []
+        return [], (str(folder_path) if folder_path != original_path else None)
 
     # 已歸檔檔名集合（比對原始檔名部分）
     archived_names = _archived_names()
@@ -65,7 +74,8 @@ def scan_folder(folder: str) -> list[dict]:
             "status":       status,
         })
 
-    return results
+    fallback_folder = str(folder_path) if folder_path != original_path else None
+    return results, fallback_folder
 
 
 def _archived_names() -> set[str]:
@@ -147,6 +157,7 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
     from converters.kadomo      import KadomoConverter
     from converters.licai       import LicaiConverter
     from converters.xuantu      import XuantuConverter
+    from converters.tuanma      import TuanmaConverter
 
     CONVERTER_MAP = {
         "shopee":     ShopeeConverter,
@@ -158,6 +169,7 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
         "kadomo":     KadomoConverter,
         "licai":      LicaiConverter,
         "xuantu":     XuantuConverter,
+        "tuanma":     TuanmaConverter,
     }
 
     from app.repositories.product_repo import ProductRepository

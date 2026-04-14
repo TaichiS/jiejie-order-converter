@@ -13,6 +13,7 @@ SOURCE_LABELS = {
     "kadomo":     "卡多摩",
     "licai":      "麗兒采家",
     "xuantu":     "炫兔團購",
+    "tuanma":     "其他團媽",
 }
 
 SOURCE_COLORS = {
@@ -25,6 +26,7 @@ SOURCE_COLORS = {
     "kadomo":     "dark",
     "licai":      "warning",
     "xuantu":     "info",
+    "tuanma":     "primary",
 }
 
 

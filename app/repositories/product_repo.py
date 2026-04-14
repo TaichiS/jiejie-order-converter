@@ -21,6 +21,7 @@ _SOURCE_TYPE_TO_CHANNELS: dict[str, list[str]] = {
     "a1leage":    ["樂齡官網"],
     "jjofficial": ["寶寶粥官網"],
     "xuantu":     ["炫兔團"],
+    "tuanma":     ["其他團媽"],
     "yodee":      ["吉寶通路"],
     "kadomo":     ["卡多摩"],
     "licai":      ["麗采"],

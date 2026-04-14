@@ -239,6 +239,11 @@ body {
   color: #fff;
   border-radius: 4px;
 }
+.badge-tuanma {
+  background: #8b5cf6;
+  color: #fff;
+  border-radius: 4px;
+}
 .badge-unknown {
   background: rgba(156, 163, 175, 0.18);
   color: #374151;

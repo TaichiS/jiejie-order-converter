@@ -124,9 +124,18 @@ async function doScan() {
     const data = await res.json();
     if (!res.ok) { showToast(data.error || '掃描失敗', 'danger'); return; }
 
+    // 若後端自動 fallback 到上層目錄，更新輸入框並提示使用者
+    if (data.fallback_folder) {
+      const input = document.getElementById('folderInput');
+      if (input) input.value = data.fallback_folder;
+      showToast(`原路徑不存在，已自動切換至：${data.fallback_folder}`, 'warning');
+      try { localStorage.setItem('default_folder', data.fallback_folder); } catch(e) {}
+    } else {
+      try { localStorage.setItem('default_folder', folder); } catch(e) {}
+    }
+
     _scanResult = data;
     renderFileList(data.files);
-    try { localStorage.setItem('default_folder', folder); } catch(e) {}
   } catch (e) {
     showToast('掃描發生錯誤：' + e.message, 'danger');
   } finally {
@@ -147,13 +156,30 @@ function renderFileList(files) {
   countBadge.textContent = `${files.length} 個檔案`;
 
   const badgeMap = {
-    shopee:  ['badge-shopee',  '蝦皮'],
-    a1baby:  ['badge-a1baby',  'A1婦幼展'],
-    leage:   ['badge-leage',   '樂齡網'],
-    a1leage: ['badge-a1leage', 'A1樂齡官網'],
+    shopee:     ['badge-shopee',     '蝦皮'],
+    a1baby:     ['badge-a1baby',     'A1婦幼展'],
+    leage:      ['badge-leage',      '樂齡網'],
+    a1leage:    ['badge-a1leage',    'A1樂齡官網'],
+    jjofficial: ['badge-jjofficial', '捷捷官網'],
+    yodee:      ['badge-yodee',      '優迪通路'],
+    kadomo:     ['badge-kadomo',     '卡多摩'],
+    licai:      ['badge-licai',      '麗兒采家'],
+    xuantu:     ['badge-xuantu',     '炫兔團購'],
+    tuanma:     ['badge-tuanma',     '其他團媽'],
   };
 
   let pendingCount = 0;
+
+  if (files.length === 0) {
+    listEl.innerHTML = `<div class="text-muted small py-3 px-1 text-center">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" class="mb-2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+      <div>資料夾中沒有可處理的 .xlsx / .pdf 檔案</div>
+      <div class="text-secondary" style="font-size:.75rem;margin-top:.25rem">請確認檔案格式是否為 .xlsx（舊版 .xls 不支援）</div>
+    </div>`;
+    unknownPanel.classList.add('d-none');
+    btnConvert && (btnConvert.disabled = true);
+    return;
+  }
 
   listEl.innerHTML = files.map((f, i) => {
     const isArchived = f.status === 'archived';

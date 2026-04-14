@@ -31,8 +31,12 @@ def detect_each(files: list[Path]) -> dict[Path, str | None]:
             result[f] = "shopee"
         elif _confirm_a1leage(f):
             result[f] = "a1leage"
+        elif _confirm_tuanma(f):
+            result[f] = "tuanma"
         elif _confirm_jjofficial(f):
             result[f] = "jjofficial"
+        elif _confirm_xuantu(f):
+            result[f] = "xuantu"
         elif _confirm_yodee(f):
             result[f] = "yodee"
         elif _confirm_licai(f):
@@ -135,6 +139,26 @@ def _confirm_a1leage(path: Path) -> bool:
             return False
         hdrs = {str(v).strip() for v in row if v}
         return {"貨號", "收件人地址", "購買品項"}.issubset(hdrs)
+    except Exception:
+        return False
+
+
+def _confirm_tuanma(path: Path) -> bool:
+    """確認 xlsx 為其他團媽訂單（Sales 工作表 + 含「訂單備註」與「折抵購物金分攤」）"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        if "Sales" not in wb.sheetnames:
+            return False
+        ws = wb["Sales"]
+        row = next(ws.iter_rows(max_row=1, values_only=True), None)
+        if not row:
+            return False
+        hdrs = {str(v).strip() for v in row if v}
+        return {
+            "訂單號碼", "商品貨號", "全家服務編號 / 7-11 店號",
+            "折抵購物金分攤", "訂單備註",
+        }.issubset(hdrs)
     except Exception:
         return False
 

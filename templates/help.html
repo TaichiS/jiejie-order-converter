@@ -172,6 +172,24 @@
       </table>
     </div>
 
+    <!-- 其他團媽 -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-tuanma px-3 py-1" style="font-size:.85rem">其他團媽</span>
+        <h6 class="fw-bold mb-0">其他團媽訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td>後台匯出的 <code>.xlsx</code> 檔</td></tr>
+          <tr><td class="text-muted">工作表名稱</td><td><code>Sales</code></td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>欄位與捷捷官網相近，額外包含「訂單備註」與「折抵購物金分攤」</td></tr>
+          <tr><td class="text-muted">轉換邏輯</td><td>直接複製所有資料列，僅移除「訂單備註」欄位</td></tr>
+          <tr><td class="text-muted">品號資料</td><td>集中管理於系統資料庫，通路代號 <code>tuanma</code>（獨立定價，不影響其他通路）</td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td>MMDD其他團媽.xlsx</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- 通用說明 -->
     <div class="glass-card p-4">
       <h6 class="fw-bold mb-3" style="color:#c2410c">通用操作流程</h6>
