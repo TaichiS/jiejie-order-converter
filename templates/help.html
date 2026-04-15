@@ -12,7 +12,7 @@
         </svg>
         使用說明
       </h5>
-      <p class="text-muted small mb-0">目前支援以下 9 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
+      <p class="text-muted small mb-0">目前支援以下 10 種訂單來源，系統會自動偵測格式，無需手動選擇。</p>
     </div>
 
     <!-- 蝦皮 -->
@@ -125,7 +125,7 @@
         <tbody>
           <tr><td class="text-muted" style="width:7rem">輸入格式</td><td><code>YYYYMMDD_採購單[倉別] [店名].xlsx</code></td></tr>
           <tr><td class="text-muted">識別特徵</td><td>前 15 列內含「倉別」與「商品條碼」欄位</td></tr>
-          <tr><td class="text-muted">對照表</td><td><code>卡多摩/條碼對照表.json</code>、<code>單價對照表.json</code>、<code>通路資料.json</code></td></tr>
+          <tr><td class="text-muted">對照表</td><td>條碼／品號、單價由資料庫統一管理；門市資訊來自 <code>卡多摩/通路資料.json</code></td></tr>
           <tr><td class="text-muted">訂單編號</td><td>格式：<code>[倉別]-[月日]</code>，如 <code>K009-0330</code></td></tr>
           <tr><td class="text-muted">每檔獨立</td><td>不同門市的採購單輸出為不同的 xlsx 檔</td></tr>
           <tr><td class="text-muted">輸出檔案</td><td>{倉別}-{MMDD}.xlsx</td></tr>
@@ -190,11 +190,30 @@
       </table>
     </div>
 
+    <!-- CHOCHO -->
+    <div class="glass-card p-4 mb-3">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-source badge-chocho px-3 py-1" style="font-size:.85rem">CHOCHO通路</span>
+        <h6 class="fw-bold mb-0">CHOCHO 通路訂單</h6>
+      </div>
+      <table class="table table-sm table-borderless mb-0" style="font-size:.9rem">
+        <tbody>
+          <tr><td class="text-muted" style="width:7rem">輸入格式</td><td><code>*.csv</code>（檔名需包含 <code>CHOCHO</code>）</td></tr>
+          <tr><td class="text-muted">標頭欄位</td><td><code>訂單編號, 收件人, 地址, 電話, 產品編號, 產品名稱, 數量, 單價</code></td></tr>
+          <tr><td class="text-muted">識別特徵</td><td>CSV 檔且標頭同時含「訂單編號」與「產品編號」</td></tr>
+          <tr><td class="text-muted">數量轉換</td><td>原始數量 ÷ 包數（依資料庫 <code>pack_size</code>）</td></tr>
+          <tr><td class="text-muted">單價轉換</td><td>以資料庫包數價格為基礎，計算含 5% 稅並無條件進位（<code>ceil(pack_price × 1.05)</code>）</td></tr>
+          <tr><td class="text-muted">品號資料</td><td>集中管理於系統資料庫，通路代號 <code>chocho通路</code></td></tr>
+          <tr><td class="text-muted">輸出檔案</td><td><code>ERP_YYYY-MM-DD_to_YYYY-MM-DD.csv</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- 通用說明 -->
     <div class="glass-card p-4">
       <h6 class="fw-bold mb-3" style="color:#c2410c">通用操作流程</h6>
       <ol class="mb-0" style="font-size:.9rem;line-height:2">
-        <li>將訂單檔案（xlsx / pdf）放入同一個資料夾</li>
+        <li>將訂單檔案（xlsx / pdf / csv）放入同一個資料夾</li>
         <li>在首頁輸入資料夾路徑，或點選資料夾圖示選取（路徑會自動記住）</li>
         <li>點擊「掃描」，系統自動辨識訂單來源</li>
         <li>確認檔案清單，勾選要處理的檔案，點「開始轉換」</li>

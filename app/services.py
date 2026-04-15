@@ -41,10 +41,10 @@ def scan_folder(folder: str) -> tuple[list[dict], str | None]:
             fallback = parent
         folder_path = fallback if fallback.is_dir() else Path.home()
 
-    # 收集所有 xlsx / pdf 檔案
+    # 收集所有 xlsx / pdf / csv 檔案
     all_files = sorted(
         [f for f in folder_path.iterdir()
-         if f.is_file() and f.suffix.lower() in (".xlsx", ".pdf")],
+         if f.is_file() and f.suffix.lower() in (".xlsx", ".pdf", ".csv")],
         key=lambda f: f.name
     )
 
@@ -110,7 +110,7 @@ def run_conversion(folder: str, operator: str,
     folder_path = Path(folder)
     all_files   = sorted(
         [f for f in folder_path.iterdir()
-         if f.is_file() and f.suffix.lower() in (".xlsx", ".pdf")],
+         if f.is_file() and f.suffix.lower() in (".xlsx", ".pdf", ".csv")],
         key=lambda f: f.name
     )
     # 排除已歸檔
@@ -158,6 +158,7 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
     from converters.licai       import LicaiConverter
     from converters.xuantu      import XuantuConverter
     from converters.tuanma      import TuanmaConverter
+    from converters.chocho      import ChochoConverter
 
     CONVERTER_MAP = {
         "shopee":     ShopeeConverter,
@@ -170,6 +171,7 @@ def _convert_group(source_type: str, files: list[Path], operator: str) -> Conver
         "licai":      LicaiConverter,
         "xuantu":     XuantuConverter,
         "tuanma":     TuanmaConverter,
+        "chocho":     ChochoConverter,
     }
 
     from app.repositories.product_repo import ProductRepository

@@ -14,6 +14,7 @@ SOURCE_LABELS = {
     "licai":      "麗兒采家",
     "xuantu":     "炫兔團購",
     "tuanma":     "其他團媽",
+    "chocho":     "CHOCHO通路",
 }
 
 SOURCE_COLORS = {
@@ -27,6 +28,7 @@ SOURCE_COLORS = {
     "licai":      "warning",
     "xuantu":     "info",
     "tuanma":     "primary",
+    "chocho":     "success",
 }
 
 

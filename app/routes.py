@@ -263,6 +263,7 @@ _ALIAS_CHANNEL_MAP = {
     "yodee":    "吉寶通路",
     "kadomo":   "卡多摩",
     "licai":    "麗采",
+    "chocho":   "chocho通路",
 }
 
 

@@ -19,6 +19,11 @@ def detect_each(files: list[Path]) -> dict[Path, str | None]:
 
     xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
     pdf_files  = [f for f in files if f.suffix.lower() == ".pdf"]
+    csv_files  = [f for f in files if f.suffix.lower() == ".csv"]
+
+    # CSV：各自確認是否為 CHOCHO
+    for f in csv_files:
+        result[f] = "chocho" if _confirm_chocho(f) else None
 
     # PDF：各自確認是否為樂齡網
     for f in pdf_files:
@@ -237,6 +242,26 @@ def _confirm_leage(path: Path) -> bool:
         with pdfplumber.open(path) as pdf:
             text = pdf.pages[0].extract_text() or ""
             return bool(re.search(r"樂齡生活事業|PO\d{8}", text))
+    except Exception:
+        return False
+
+
+def _confirm_chocho(path: Path) -> bool:
+    """確認 CSV 為 CHOCHO 訂單（檔名含 CHOCHO + 標準標頭）"""
+    if "chocho" not in path.stem.lower():
+        return False
+    try:
+        import csv
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.reader(f)
+            row = next(reader, None)
+            if not row:
+                return False
+            hdrs = {h.strip() for h in row if h}
+            return {
+                "訂單編號", "收件人", "地址", "電話",
+                "產品編號", "產品名稱", "數量", "單價",
+            }.issubset(hdrs)
     except Exception:
         return False
 

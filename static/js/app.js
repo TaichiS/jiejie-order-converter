@@ -166,6 +166,7 @@ function renderFileList(files) {
     licai:      ['badge-licai',      '麗兒采家'],
     xuantu:     ['badge-xuantu',     '炫兔團購'],
     tuanma:     ['badge-tuanma',     '其他團媽'],
+    chocho:     ['badge-chocho',     'CHOCHO通路'],
   };
 
   let pendingCount = 0;
@@ -173,8 +174,8 @@ function renderFileList(files) {
   if (files.length === 0) {
     listEl.innerHTML = `<div class="text-muted small py-3 px-1 text-center">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" class="mb-2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-      <div>資料夾中沒有可處理的 .xlsx / .pdf 檔案</div>
-      <div class="text-secondary" style="font-size:.75rem;margin-top:.25rem">請確認檔案格式是否為 .xlsx（舊版 .xls 不支援）</div>
+      <div>資料夾中沒有可處理的 .xlsx / .pdf / .csv 檔案</div>
+      <div class="text-secondary" style="font-size:.75rem;margin-top:.25rem">請確認檔案格式是否為 .xlsx 或 .csv（舊版 .xls 不支援）</div>
     </div>`;
     unknownPanel.classList.add('d-none');
     btnConvert && (btnConvert.disabled = true);
