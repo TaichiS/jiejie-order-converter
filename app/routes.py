@@ -535,12 +535,34 @@ def clear_data():
 
 @bp.route("/admin/download-product-template")
 def download_product_template():
-    """下載品號資料統整.csv 原檔。"""
-    csv_path = BASE_DIR / "品號資料統整.csv"
-    if not csv_path.exists():
-        abort(404)
+    """從資料庫匯出品號資料統整.csv。"""
+    from app.models import UnifiedProduct
+
+    import csv
+    import io
+
+    headers = ["條碼", "品號", "品名", "類別", "通路", "份數", "包數", "份數價格", "包數價格", "商品結帳價"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=headers)
+    writer.writeheader()
+
+    for up in UnifiedProduct.query.order_by(UnifiedProduct.channel, UnifiedProduct.sku).all():
+        writer.writerow({
+            "條碼": up.barcode or "",
+            "品號": up.sku,
+            "品名": up.name,
+            "類別": up.category or "",
+            "通路": up.channel,
+            "份數": up.quantity or 1,
+            "包數": up.pack_size or "",
+            "份數價格": up.unit_price if up.unit_price is not None else "",
+            "包數價格": up.pack_price if up.pack_price is not None else "",
+            "商品結帳價": up.checkout_price if up.checkout_price is not None else "",
+        })
+
+    byte_buf = io.BytesIO(buf.getvalue().encode("utf-8-sig"))
     return send_file(
-        csv_path,
+        byte_buf,
         mimetype="text/csv",
         as_attachment=True,
         download_name="品號資料統整.csv",
