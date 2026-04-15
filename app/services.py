@@ -41,12 +41,14 @@ def scan_folder(folder: str) -> tuple[list[dict], str | None]:
             fallback = parent
         folder_path = fallback if fallback.is_dir() else Path.home()
 
-    # 收集所有 xlsx / pdf / csv 檔案
+    # 收集所有檔案（區分支援與不支援）
+    supported_exts = {".xlsx", ".pdf", ".csv"}
     all_files = sorted(
-        [f for f in folder_path.iterdir()
-         if f.is_file() and f.suffix.lower() in (".xlsx", ".pdf", ".csv")],
+        [f for f in folder_path.iterdir() if f.is_file()],
         key=lambda f: f.name
     )
+    supported_files = [f for f in all_files if f.suffix.lower() in supported_exts]
+    unsupported_files = [f for f in all_files if f.suffix.lower() not in supported_exts]
 
     if not all_files:
         return [], (str(folder_path) if folder_path != original_path else None)
@@ -55,10 +57,10 @@ def scan_folder(folder: str) -> tuple[list[dict], str | None]:
     archived_names = _archived_names()
 
     # 逐檔偵測來源
-    file_types = detector.detect_each(all_files)
+    file_types = detector.detect_each(supported_files)
 
     results = []
-    for f in all_files:
+    for f in supported_files:
         if _is_archived(f.name, archived_names):
             status = "archived"
             src    = None
@@ -72,6 +74,15 @@ def scan_folder(folder: str) -> tuple[list[dict], str | None]:
             "source_type":  src,
             "source_label": SOURCE_LABELS.get(src, "未識別") if src else "未識別",
             "status":       status,
+        })
+
+    for f in unsupported_files:
+        results.append({
+            "name":         f.name,
+            "path":         str(f),
+            "source_type":  None,
+            "source_label": f"副檔名不支援 ({f.suffix.lower()})",
+            "status":       "unsupported",
         })
 
     fallback_folder = str(folder_path) if folder_path != original_path else None

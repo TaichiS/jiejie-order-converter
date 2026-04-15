@@ -183,29 +183,48 @@ function renderFileList(files) {
   }
 
   listEl.innerHTML = files.map((f, i) => {
-    const isArchived = f.status === 'archived';
-    const src        = f.source_type;
-    if (!isArchived) pendingCount++;
+    const isArchived   = f.status === 'archived';
+    const isUnsupported = f.status === 'unsupported';
+    const src          = f.source_type;
+    if (!isArchived && !isUnsupported) pendingCount++;
 
-    const [badgeClass, badgeLabel] = badgeMap[src] || ['badge-unknown', '未識別'];
+    let badgeClass, badgeLabel;
+    if (isUnsupported) {
+      badgeClass = 'badge-unknown';
+      badgeLabel = f.source_label || '不支援';
+    } else {
+      [badgeClass, badgeLabel] = badgeMap[src] || ['badge-unknown', '未識別'];
+    }
+
     const statusHtml = isArchived
       ? '<span class="badge bg-secondary bg-opacity-20 text-secondary-emphasis rounded-pill" style="font-size:.72rem">已處理</span>'
-      : `<span class="badge-source ${badgeClass}" style="font-size:.72rem">${f.source_label || badgeLabel}</span>`;
+      : isUnsupported
+        ? `<span class="badge bg-secondary bg-opacity-20 text-secondary-emphasis rounded-pill" style="font-size:.72rem">${badgeLabel}</span>`
+        : `<span class="badge-source ${badgeClass}" style="font-size:.72rem">${f.source_label || badgeLabel}</span>`;
 
-    const checkbox = isArchived
-      ? `<input type="checkbox" class="file-checkbox form-check-input" disabled
-              style="flex-shrink:0;width:16px;height:16px;cursor:not-allowed;opacity:.4">`
-      : `<input type="checkbox" class="file-checkbox form-check-input" checked
+    let checkbox;
+    if (isUnsupported) {
+      checkbox = '<span style="flex-shrink:0;width:16px;height:16px;display:inline-block"></span>';
+    } else if (isArchived) {
+      checkbox = `<input type="checkbox" class="file-checkbox form-check-input" disabled
+              style="flex-shrink:0;width:16px;height:16px;cursor:not-allowed;opacity:.4">`;
+    } else {
+      checkbox = `<input type="checkbox" class="file-checkbox form-check-input" checked
               data-path="${f.path}" style="flex-shrink:0;width:16px;height:16px;cursor:pointer"
               onclick="event.stopPropagation()" onchange="onFileCheckChange()">`;
+    }
+
+    const strokeColor = isArchived || isUnsupported ? '#94a3b8' : '#f97316';
+    const clickAttr   = isArchived || isUnsupported ? '' : 'onclick="this.querySelector(\'.file-checkbox\').click()"';
+    const rowClass    = isArchived ? ' archived' : '';
 
     return `
-      <div class="file-item d-flex align-items-center gap-2 py-2 px-3 rounded${isArchived ? ' archived' : ''}"
+      <div class="file-item d-flex align-items-center gap-2 py-2 px-3 rounded${rowClass}"
            style="animation-delay:${i * 40}ms"
-           ${isArchived ? '' : 'onclick="this.querySelector(\'.file-checkbox\').click()"'}>
+           ${clickAttr}>
         ${checkbox}
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="${isArchived ? '#94a3b8' : '#f97316'}" stroke-width="2" style="flex-shrink:0">
+             stroke="${strokeColor}" stroke-width="2" style="flex-shrink:0">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/>
         </svg>
         <span class="small text-truncate flex-grow-1" style="max-width:280px" title="${f.name}">${f.name}</span>
