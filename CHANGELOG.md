@@ -2,6 +2,24 @@
 
 ---
 
+## v12 — 2026-04-15
+
+### 新功能
+- **CHOCHO 通路轉換模組**
+  - 新增 `converters/chocho.py`：讀取 CSV 訂單檔，依資料庫 `pack_size` 換算數量，單價以 `ceil(pack_price × 1.05)` 計算含稅價
+  - 輸出檔名：`ERP_YYYY-MM-DD_to_YYYY-MM-DD.csv`
+  - 偵測特徵：`.csv` 檔名含 `CHOCHO` 且標頭同時含「訂單編號」與「產品編號」
+  - 品號資料已於先前匯入資料庫（channel=`chocho通路`）
+- **全系統支援 CSV**
+  - `scan_folder`、`services.run_conversion`、`detector.detect_each` 均納入 `.csv` 副檔名
+- **卡多摩通路資料恢復**
+  - 從 `legacy/卡多摩/` 複製 `通路資料.json` 回專案根目錄 `卡多摩/通路資料.json`
+- **前端註冊與說明更新**
+  - `SOURCE_LABELS` / `SOURCE_COLORS`、`badgeMap`、CSS 新增 `chocho`
+  - help.html 新增 CHOCHO 區塊，支援來源數更新為 10 種
+
+---
+
 ## v11 — 2026-04-14
 
 ### 新功能
