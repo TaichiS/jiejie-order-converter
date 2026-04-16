@@ -20,6 +20,15 @@
 - **新增 README.md**
   - 補上系統架構與使用說明文件
 
+### 調整
+- **資料庫納入版本控制與壓縮檔**
+  - 移除 `.gitignore` 對 `data/*.db` 的排除，使 `data/conversion.db` 可進入 GitHub 與 7z 壓縮檔
+  - 更新 `CLAUDE.md` 壓縮指令，移除 `-xr!"*.db"` 參數
+- **Windows 啟動相容性修復**
+  - `start.bat` 中所有 `>/dev/null` 改為 Windows 正確語法 `>nul`，避免在 Windows 磁碟根目錄產生 `dev\null` 檔案或造成閃退
+  - 新增 `uv.lock` 檔案，確保 Windows 端 `uv run` 時可正確解析依賴版本
+  - 更新 `CLAUDE.md` 壓縮指令，排除 macOS 版 `.venv`，防止 Windows 解壓後誤用無法執行的 macOS 虛擬環境
+
 ### 整理
 - 將 `chocho/` 測試資料移入 `legacy/chocho/`（不上傳版本控制）
 
