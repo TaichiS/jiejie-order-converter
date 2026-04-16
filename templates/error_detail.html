@@ -26,8 +26,7 @@
       <div class="small fw-semibold mb-1" style="color:#9a3412">來源</div>
       <div>
         {% set src = log.source_type %}
-        {% set labels = {'shopee':'蝦皮','a1baby':'婦幼展','leage':'樂齡網'} %}
-        <span class="badge-source badge-{{ src }}">{{ labels.get(src, src) }}</span>
+        <span class="badge-source badge-{{ src }}">{{ source_labels.get(src, src) }}</span>
       </div>
     </div>
     <div class="col-sm-6 col-md-3">

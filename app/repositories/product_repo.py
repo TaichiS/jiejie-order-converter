@@ -9,7 +9,8 @@ import re
 
 from app.models import UnifiedProduct
 
-_CODE_RE = re.compile(r'^(\d+[A-Z]?-[A-Z]?\d+)')
+_CODE_RE      = re.compile(r'^(\d+[A-Z]?-[A-Z]?\d+)')
+_BARE_CODE_RE = re.compile(r'^([A-Z]\d+)')
 
 
 # CSV 通路名稱 → converter source_type 的對應
@@ -54,9 +55,23 @@ class ProductRepository:
         for up in rows:
             row = _to_dict(up)
             product_map[up.name] = row
+            codes: list[str] = []
             m = _CODE_RE.match(up.name)
             if m:
-                code_map[m.group(1)] = row
+                codes.append(m.group(1))
+            else:
+                m2 = _BARE_CODE_RE.match(up.name)
+                if m2:
+                    codes.append(m2.group(1))
+
+            for code in codes:
+                code_map[code] = row
+                # 蝦皮：同時註冊帶 2- 與不帶 2- 的兩種 key，因訂單品名可能兩種格式都有
+                if source_type == "shopee":
+                    if code.startswith("2-"):
+                        code_map[code[2:]] = row
+                    elif re.match(r"^[A-Z]\d+$", code):
+                        code_map["2-" + code] = row
 
         return product_map, code_map
 

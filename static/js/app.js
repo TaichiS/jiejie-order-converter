@@ -427,11 +427,13 @@ async function _fdShowDecision(msg) {
   if (errors.length) {
     listEl.innerHTML = errors.map(e => {
       const fileName = e.source_file ? e.source_file.replace(/^.*[\\/]/, '') : '';
+      const sourceLabel = e.source_label || '';
       const orig = e.original_value ? `（${e.original_value}）` : '';
       return `
       <div class="py-2 border-bottom" style="border-color:rgba(0,0,0,.06)!important">
         <div class="d-flex gap-2 align-items-start">
           <span class="badge bg-light text-dark border" style="flex-shrink:0;font-size:.75rem">${fileName || '未知檔案'}</span>
+          ${sourceLabel ? `<span class="badge bg-light text-dark border" style="flex-shrink:0;font-size:.75rem">${sourceLabel}</span>` : ''}
           <span class="text-muted" style="flex-shrink:0">第${e.row_number}列</span>
         </div>
         <div class="mt-1" style="color:#c2410c;font-size:.9rem" title="${e.reason}">

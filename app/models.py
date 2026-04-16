@@ -72,6 +72,8 @@ class ConversionError(db.Model):
             "reason":         self.reason,
             "candidates":     self.candidates,
             "source_file":    self.source_file or "",
+            "source_type":    self.log.source_type if self.log else "",
+            "source_label":   SOURCE_LABELS.get(self.log.source_type, self.log.source_type) if self.log else "",
         }
 
 

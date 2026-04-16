@@ -2,6 +2,29 @@
 
 ---
 
+## v14 — 2026-04-16
+
+### 錯誤修正
+- **蝦皮品號對照失敗（S11 田園雞肉燉飯）**
+  - `ProductRepository.load_channel()` 的 `code_map` 建立邏輯僅能從 `1-08` 這類數字開頭品名提取代碼，無法處理 `S11田園雞肉燉飯` 這種字母開頭的 bare code
+  - 新增 `_BARE_CODE_RE` 支援 `S11`、`M3` 等代碼，並於蝦皮通路自動註冊 `2-S11` / `S11` 雙 key，使蝦皮訂單品名 `2-S11田園雞肉燉飯` 能正確命中品號 `D50600011`
+- **BaseConverter 擴充**
+  - 新增 `_sku_map` 與 `_lookup_by_sku()`，供未來轉換器直接以品號精確查詢品項資料
+
+### 新功能與改進
+- **錯誤訊息顯示轉換模組名稱**
+  - `ConversionError.to_dict()` 回傳 `source_type` / `source_label`
+  - 前端 `_fdShowDecision` 在檔名旁邊顯示來源 badge（如「蝦皮」「CHOCHO通路」）
+- **修正模板硬編碼來源標籤**
+  - `error_detail.html`、`download.html` 改為使用 `source_labels` 變數，不再遺漏新通路
+- **新增 README.md**
+  - 補上系統架構與使用說明文件
+
+### 整理
+- 將 `chocho/` 測試資料移入 `legacy/chocho/`（不上傳版本控制）
+
+---
+
 ## v12 — 2026-04-15
 
 ### 新功能

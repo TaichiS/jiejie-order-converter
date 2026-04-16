@@ -83,6 +83,7 @@ class BaseConverter(ABC):
         self.output_dir    = output_dir
         self._product_map: dict[str, dict] = {}   # 品名 → row dict
         self._code_map:    dict[str, dict] = {}   # 代碼前綴 → row dict（如 "1-08" → {...}）
+        self._sku_map:     dict[str, dict] = {}   # 品號 → row dict
 
     # ── 公開入口 ──────────────────────────────────────────────────────────
     def convert(self, input_files: list[Path]) -> ConversionResult:
@@ -102,6 +103,11 @@ class BaseConverter(ABC):
     def _load_reference(self) -> None:
         """從 ProductRepository 載入指定通路的品號資料到 in-memory cache。"""
         self._product_map, self._code_map = self.repository.load_channel(self.source_type)
+        self._sku_map = {
+            str(p.get("品號", "")).strip(): p
+            for p in self._product_map.values()
+            if p.get("品號")
+        }
 
     def _lookup_by_name(self, query: str,
                         scope: str | None = None,
@@ -176,6 +182,10 @@ class BaseConverter(ABC):
     def _lookup_product(self, name: str) -> dict | None:
         """精確比對品名，找不到回傳 None（向下相容舊呼叫）"""
         return self._product_map.get(name.strip())
+
+    def _lookup_by_sku(self, sku: str) -> dict | None:
+        """依品號精確查詢，找不到回傳 None。"""
+        return self._sku_map.get(sku.strip())
 
     # ── 抽象方法（子類實作）────────────────────────────────────────────────
     @property
