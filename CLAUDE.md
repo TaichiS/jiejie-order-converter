@@ -10,7 +10,7 @@
 ```bash
 cd /Users/lung/Documents/企業顧問/02_客戶管理/捷捷寶寶粥
 7z a "訂單格式轉換系統_YYYYMMDD_vN.7z" "訂單格式轉換系統" \
-  -xr!"__pycache__" -xr!"*.pyc" -xr!".git" -xr!"*.db" \
+  -xr!"__pycache__" -xr!"*.pyc" -xr!".git" \
   -xr!"output" -xr!"archive" -xr!"uploads" -xr!".env" \
   -xr!"*.jpg" -xr!"*.png"
 ```

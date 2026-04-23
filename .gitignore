@@ -5,10 +5,6 @@ __pycache__/
 .venv/
 .env
 
-# 資料庫
-data/*.db
-data/*.db-*
-
 # 執行期產生的資料
 output/
 archive/

@@ -20,6 +20,11 @@
 - **新增 README.md**
   - 補上系統架構與使用說明文件
 
+### 調整
+- **資料庫納入版本控制與壓縮檔**
+  - 移除 `.gitignore` 對 `data/*.db` 的排除，使 `data/conversion.db` 可進入 GitHub 與 7z 壓縮檔
+  - 更新 `CLAUDE.md` 壓縮指令，移除 `-xr!"*.db"` 參數
+
 ### 整理
 - 將 `chocho/` 測試資料移入 `legacy/chocho/`（不上傳版本控制）
 
