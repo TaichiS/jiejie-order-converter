@@ -1,5 +1,5 @@
 ﻿@echo off
-chcp 65001 >/dev/null
+chcp 65001 >nul
 title 捷捷寶寶粥 訂單轉換系統
 
 cd /d "%~dp0"
@@ -9,7 +9,7 @@ echo  捷捷寶寶粥 訂單轉換系統
 echo ========================================
 echo.
 
-where uv >/dev/null 2>&1
+where uv >nul 2>&1
 if errorlevel 1 (
     echo [錯誤] 找不到 uv，尚未完成安裝！
     echo.
@@ -28,7 +28,7 @@ echo  啟動完成後瀏覽器會自動開啟。
 echo  請勿關閉此視窗，關閉即停止系統。
 echo.
 
-start /min cmd /c "timeout /t 3 /nobreak >/dev/null && start http://127.0.0.1:5099"
+start /min cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:5099"
 
 uv run python main.py
 

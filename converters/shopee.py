@@ -84,6 +84,9 @@ class ShopeeConverter(BaseConverter):
 
         for row_idx, raw_row in enumerate(rows[1:], start=2):
             row = list(raw_row)
+            # 跳過全空列（read_only 模式可能多讀 Excel dimension 尾端空列）
+            if row[COL_ORDER_ID] is None and row[COL_PRODUCT] is None:
+                continue
             order_id     = str(row[COL_ORDER_ID]) if row[COL_ORDER_ID] else ""
             full_name    = str(row[COL_PRODUCT])  if row[COL_PRODUCT]  else ""
             qty_order    = row[COL_QTY] or 0
