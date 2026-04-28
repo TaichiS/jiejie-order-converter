@@ -3,10 +3,11 @@ converters/kadomo.py
 卡多摩嬰童館採購單轉換器。
 輸入：YYYYMMDD_採購單[倉別] [店名].xlsx（含「倉別」標題列）
 輸出：{倉別}-{MMDD}.xlsx（新細明體 12pt，固定欄寬）
-參考資料：卡多摩/ 目錄下的 JSON 對照表
+參考資料：卡多摩/通路資料.csv（編號精確查找）
 """
 from __future__ import annotations
 
+import csv
 import re
 from datetime import datetime
 from pathlib import Path
@@ -38,14 +39,11 @@ class KadomoConverter(BaseConverter):
         self.data_dir = Path(__file__).resolve().parent.parent / "卡多摩"
         self._barcode_map: dict[str, str]   = {}  # barcode → product_code
         self._price_map:   dict[str, float] = {}  # product_code → price
-        self._store_map:   dict[str, str]   = {}  # warehouse_code → 店名
-        self._stores:      dict[str, dict]  = {}  # 店名 → {店名, 電話, 地址}
+        self._store_map:   dict[str, dict]  = {}  # 編號 → {店名, 電話, 地址}
 
     @property
     def source_type(self) -> str:
         return "kadomo"
-
-    # ── 覆寫：從 JSON 載入對照表，不用 CSV ──────────────────────────────────
 
     def _load_reference(self) -> None:
         # 條碼與定價從 Repository（已匯入 DB）
@@ -55,11 +53,14 @@ class KadomoConverter(BaseConverter):
             cp.sku: float(cp.price)
             for cp in ChannelPrice.query.filter_by(channel="kadomo").all()
         }
-        # 通路資料（stores/warehouses）仍從 JSON 讀取（營運資料，不進 DB）
-        import json
-        data = json.loads((self.data_dir / "通路資料.json").read_text(encoding="utf-8"))
-        self._store_map = data.get("warehouse_mapping", {})
-        self._stores    = {s["店名"]: s for s in data.get("stores", [])}
+        # 通路資料：以倉別編號精確查找
+        csv_path = self.data_dir / "通路資料.csv"
+        with open(csv_path, newline="", encoding="utf-8-sig") as f:
+            self._store_map = {
+                row["編號"]: row
+                for row in csv.DictReader(f)
+                if row["編號"]
+            }
 
     # ── 驗證 ──────────────────────────────────────────────────────────────
 
@@ -100,6 +101,8 @@ class KadomoConverter(BaseConverter):
             if date and not order_date:
                 order_date = date
 
+        status = "completed" if total_fail == 0 else ("partial" if total_success > 0 else "failed")
+
         return ConversionResult(
             source_type   = self.source_type,
             success_count = total_success,
@@ -107,7 +110,7 @@ class KadomoConverter(BaseConverter):
             order_date    = order_date,
             output_files  = all_output,
             errors        = all_errors,
-            status        = "completed" if total_success > 0 else "failed",
+            status        = status,
         )
 
     def _process_one(self, f: Path) -> tuple[Path | None, int, int, list[RowError], str]:
@@ -134,11 +137,13 @@ class KadomoConverter(BaseConverter):
         order_id   = f"{warehouse_code}-{mmdd}" if warehouse_code else mmdd
 
         # 門市資訊
-        store_name = self._store_map.get(warehouse_code, "")
-        store_info = self._stores.get(store_name, {})
-        recipient  = store_info.get("店名",  store_name or "未知門市")
-        address    = store_info.get("地址",  "")
-        phone      = store_info.get("電話",  "")
+        store_info, store_error = self._resolve_store_info(warehouse_code, f.name)
+        if store_error:
+            return None, 0, 1, [store_error], order_date
+
+        recipient = store_info["店名"]
+        address   = store_info["地址"]
+        phone     = store_info["電話"]
 
         # 欄位索引
         b_col  = col_map.get("商品條碼")
@@ -189,6 +194,16 @@ class KadomoConverter(BaseConverter):
             date_obj, f"{order_id}.xlsx", output_rows,
         )
         return out_path, len(output_rows), len(errors), errors, order_date
+
+    def _resolve_store_info(self, warehouse_code: str, filename: str) -> tuple[dict | None, RowError | None]:
+        store_info = self._store_map.get(warehouse_code)
+        if not store_info:
+            return None, RowError(
+                0, "倉別", warehouse_code,
+                f"倉別編號 {warehouse_code!r} 不在通路資料.csv 中",
+                source_file=filename,
+            )
+        return store_info, None
 
 
 # ── 輸出 ──────────────────────────────────────────────────────────────────
