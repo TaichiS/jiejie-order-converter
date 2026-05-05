@@ -2,6 +2,34 @@
 
 ---
 
+## v17 — 2026-05-04
+
+### 資料更新
+- **品號資料庫價格更新**
+  - 更新 `data/conversion.db` 品號資料，同步最新商品售價
+
+---
+
+## v16 — 2026-04-29
+
+### 重構
+- **卡多摩通路資料改用 CSV，以倉別編號精確查找**
+  - 新增 `卡多摩/通路資料.csv`（從 `通路資料(卡多摩).xlsx` 轉換，清除 non-breaking space）
+  - 移除 `卡多摩/通路資料.json`（舊格式，含 stores / keyword_mapping / warehouse_mapping 三段結構）
+  - `converters/kadomo.py`：改讀 CSV，移除 keyword 模糊比對（fuzzy filename matching），`_resolve_store_info` 改為以倉別編號直接精確查找
+
+---
+
+## v15 — 2026-04-23
+
+### 錯誤修正
+- **蝦皮轉換器：跳過 Excel read_only 模式產生的尾端空列**
+  - `openpyxl` 以 `read_only=True` 開啟時，依 Excel `dimension` 元數據讀出超出實際內容的空列，導致商品名稱為空、「找不到「」」誤判失敗
+  - 在迴圈中加入檢查：`order_id` 與 `product` 同為 `None` 時略過該列
+  - 例：`Order.toship.20260415_20260415.xlsx` 實際 28 筆，卻被讀成 39 筆並誤報 11 筆失敗
+
+---
+
 ## v14 — 2026-04-16
 
 ### 錯誤修正
