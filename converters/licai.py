@@ -2,17 +2,28 @@
 converters/licai.py
 麗兒采家嬰童館採購單轉換器。
 
-輸入：個別門市 xlsx（由 split_orders.py 拆分後的檔案）
-  Row 0: ('門市：短名', None, '門市資訊：地址 / 電話', ...)
-  Row 1: ('單號：UWXXXXXX', None, '採購日期：YYYY/M/D', ...)
-  Row 2: 空列
-  Row 3+: (序號, 條碼, 品名, 品牌, 市價, 數量)
+支援兩種輸入格式：
+  舊格式（split_orders.py 拆分後）：每個 xlsx 為單一門市
+    Row 0: ('門市：短名', None, '門市資訊：地址 / 電話', ...)
+    Row 1: ('單號：UWXXXXXX', None, '採購日期：YYYY/M/D', ...)
+    Row 2: 空列
+    Row 3+: (序號, 條碼, 品名, 品牌, 市價, 數量)
 
-輸出：MMDD 麗采{門市短名}.xlsx
+  新格式（合併採購單）：一個 xlsx 包含多家門市，每段重複：
+    Row N+0: ('麗兒采家採購單 - 供應商', ...)  ← 標題列（可選）
+    Row N+1: ('門市：短名', None, '門市資訊：...', ...)
+    Row N+2: ('單號：UWXXXXXX', None, '採購日期：YYYY/M/D', ...)
+    Row N+3: (序, 貨號, 品名, 品牌, 市價, 門市短名)  ← 欄位標題列
+    Row N+4+: (序號, 條碼, 品名, 品牌, 市價, 數量)
+
+輸出：MMDD 麗采{門市短名}.xlsx（每家門市一個檔案）
   欄位：訂單編號, 收件人, 地址, 電話, 產品編號, 產品名稱, 數量, 單價, 備註, 備註.1
+
+參考資料：麗兒采家/通路資料.csv（店名精確查找）
 """
 from __future__ import annotations
 
+import csv
 import re
 from datetime import datetime
 from pathlib import Path
@@ -55,24 +66,20 @@ class LicaiConverter(BaseConverter):
         self._store_map = self._load_store_map()
 
     def _load_store_map(self) -> dict[str, dict]:
-        wb = openpyxl.load_workbook(
-            self.data_dir / "通路資料.xlsx", read_only=True, data_only=True
-        )
-        ws = wb.active
+        csv_path = self.data_dir / "通路資料.csv"
         store_map: dict[str, dict] = {}
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            store_full, phone, address = (str(v) if v else "" for v in row[:3])
-            if "麗兒采家" not in store_full:
-                continue
-            m = _STORE_SHORT_RE.search(store_full)
-            if not m:
-                continue
-            short = m.group(1).replace("旗艦", "")
-            store_map[short] = {
-                "store_full": store_full,
-                "phone":      phone,
-                "address":    address,
-            }
+        with open(csv_path, newline="", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                store_full = row["店名"]
+                m = _STORE_SHORT_RE.search(store_full)
+                if not m:
+                    continue
+                short = m.group(1).replace("旗艦", "")
+                store_map[short] = {
+                    "store_full": store_full,
+                    "phone":      row["電話"],
+                    "address":    row["地址"],
+                }
         return store_map
 
     def _validate(self, input_files: list[Path]) -> list[RowError]:
@@ -83,8 +90,10 @@ class LicaiConverter(BaseConverter):
             try:
                 wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
                 ws = wb.active
-                rows = list(ws.iter_rows(max_row=2, values_only=True))
-                if not rows or not any("門市：" in str(v) for v in rows[0] if v):
+                rows = list(ws.iter_rows(max_row=5, values_only=True))
+                if not rows or not any(
+                    any(v and "門市：" in str(v) for v in row) for row in rows
+                ):
                     return [RowError(0, "sheet", f.name,
                                      "找不到「門市：」標頭列",
                                      source_file=f.name)]
@@ -102,9 +111,8 @@ class LicaiConverter(BaseConverter):
         order_date    = ""
 
         for f in xlsx_files:
-            out, success, fail, errors, date = self._process_one(f)
-            if out:
-                all_output.append(out)
+            outputs, success, fail, errors, date = self._process_one(f)
+            all_output.extend(outputs)
             total_success += success
             total_fail    += fail
             all_errors.extend(errors)
@@ -121,17 +129,47 @@ class LicaiConverter(BaseConverter):
             status        = "completed" if total_success > 0 else "failed",
         )
 
-    def _process_one(self, f: Path) -> tuple[Path | None, int, int, list[RowError], str]:
+    def _process_one(self, f: Path) -> tuple[list[Path], int, int, list[RowError], str]:
         wb   = openpyxl.load_workbook(f, read_only=True, data_only=True)
         ws   = wb.active
         rows = list(ws.iter_rows(values_only=True))
 
-        row0_str = " ".join(str(v) for v in rows[0] if v)
-        row1_str = " ".join(str(v) for v in rows[1] if v)
+        # 找出所有「門市：」列的索引，每個索引代表一家門市區塊的起點
+        block_starts = [
+            i for i, row in enumerate(rows)
+            if any(v and "門市：" in str(v) for v in row)
+        ]
 
-        store_m = _STORE_RE.search(row0_str)
-        order_m = _ORDER_RE.search(row1_str)
-        date_m  = _DATE_RE.search(row1_str)
+        all_outputs: list[Path]     = []
+        all_errors:  list[RowError] = []
+        total_success = 0
+        total_fail    = 0
+        order_date    = ""
+
+        for b, start in enumerate(block_starts):
+            end   = block_starts[b + 1] if b + 1 < len(block_starts) else len(rows)
+            block = rows[start:end]
+            out, success, fail, errors, date = self._process_block(f, block, start)
+            if out:
+                all_outputs.append(out)
+            total_success += success
+            total_fail    += fail
+            all_errors.extend(errors)
+            if date and not order_date:
+                order_date = date
+
+        return all_outputs, total_success, total_fail, all_errors, order_date
+
+    def _process_block(
+        self, f: Path, rows: list, row_offset: int
+    ) -> tuple[Path | None, int, int, list[RowError], str]:
+        # rows[0] = 門市：短名 列，rows[1] = 單號：/ 採購日期：列
+        store_row_str = " ".join(str(v) for v in rows[0] if v)
+        order_row_str = " ".join(str(v) for v in rows[1] if v) if len(rows) > 1 else ""
+
+        store_m = _STORE_RE.search(store_row_str)
+        order_m = _ORDER_RE.search(order_row_str)
+        date_m  = _DATE_RE.search(order_row_str)
 
         store_short = store_m.group(1) if store_m else ""
         order_id    = order_m.group(1) if order_m else ""
@@ -150,18 +188,18 @@ class LicaiConverter(BaseConverter):
         ws_out.append(HEADERS)
 
         success = 0
-        fail = 0
+        fail    = 0
         errors: list[RowError] = []
 
-        for row_idx, row in enumerate(rows[3:], start=4):
-            if not isinstance(row[0], (int, float)):  # 略過空列與標題列
+        for i, row in enumerate(rows[2:], start=row_offset + 3):
+            if not isinstance(row[0], (int, float)):  # 略過空列與欄位標題列
                 continue
             try:
                 barcode = str(row[1]).strip() if row[1] is not None else ""
                 price   = float(row[4]) if row[4] is not None else 0.0
                 qty     = int(row[5])   if row[5] is not None else 0
             except (TypeError, ValueError) as e:
-                errors.append(RowError(row_idx, "data", str(row), str(e),
+                errors.append(RowError(i, "data", str(row), str(e),
                                        source_file=f.name))
                 continue
 
@@ -170,7 +208,7 @@ class LicaiConverter(BaseConverter):
 
             if not sku:
                 errors.append(RowError(
-                    row_idx, "barcode", barcode,
+                    i, "barcode", barcode,
                     f"條碼 {barcode!r} 查無品號",
                     source_file=f.name,
                 ))
@@ -187,10 +225,8 @@ class LicaiConverter(BaseConverter):
             for cell in row:
                 cell.font = OUTPUT_FONT
 
-        mmdd = order_date[4:8] if len(order_date) == 8 else "0000"
-        date_obj = (
-            datetime.strptime(order_date, "%Y%m%d") if order_date else datetime.today()
-        )
+        mmdd     = order_date[4:8] if len(order_date) == 8 else "0000"
+        date_obj = datetime.strptime(order_date, "%Y%m%d") if order_date else datetime.today()
         out_name = f"{mmdd} 麗采{store_short}.xlsx"
         out_path = output_path(self.output_dir.parent, self.source_type, date_obj, out_name)
 
