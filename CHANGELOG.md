@@ -2,6 +2,23 @@
 
 ---
 
+## v18 — 2026-05-11
+
+### 重構
+- **麗兒采家通路資料改用 CSV，比照卡多摩作法統一**
+  - 新增 `麗兒采家/通路資料.csv`（從 `legacy/麗兒采家/通路資料.xlsx` 篩出麗兒采家 8 家門市）
+  - `converters/licai.py`：`_load_store_map` 改讀 CSV，移除 openpyxl 依賴，改 `import csv`
+  - `data_dir` 恢復指向根目錄 `麗兒采家/`（v10 移入 legacy 後路徑未更新，導致 FileNotFoundError）
+
+### 功能新增
+- **麗兒采家轉換器支援合併採購單格式**
+  - 新格式為單一 xlsx 含多家門市資料，每段以「麗兒采家採購單」標題列 + 「門市：短名」列區分
+  - `_process_one` 改為掃描所有「門市：」列索引，拆分成多個區塊，每區塊呼叫 `_process_block`，輸出各自 xlsx
+  - `_process_block`（原 `_process_one` 邏輯）：動態定位門市列，以 `isinstance(row[0], (int, float))` 過濾空列與欄位標題列
+  - 舊格式（split_orders.py 拆分的單門市 xlsx）向下相容，不受影響
+
+---
+
 ## v17 — 2026-05-04
 
 ### 資料更新
