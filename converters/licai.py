@@ -49,9 +49,11 @@ class LicaiConverter(BaseConverter):
     def __init__(self, repository, output_dir: Path):
         super().__init__(repository, output_dir)
         self.data_dir = Path(__file__).resolve().parent.parent / "麗兒采家"
-        self._barcode_map: dict[str, str]  = {}  # barcode → sku
-        self._name_map:    dict[str, str]  = {}  # sku → 品名
-        self._store_map:   dict[str, dict] = {}  # 短名 → {store_full, phone, address}
+        self._barcode_map: dict[str, str]   = {}  # barcode → sku
+        self._name_map:    dict[str, str]   = {}  # sku → 品名
+        self._price_map:   dict[str, float] = {}  # sku → 包數價格
+        self._pack_map:    dict[str, int]   = {}  # sku → 包數
+        self._store_map:   dict[str, dict]  = {}  # 短名 → {store_full, phone, address}
 
     @property
     def source_type(self) -> str:
@@ -59,10 +61,22 @@ class LicaiConverter(BaseConverter):
 
     def _load_reference(self) -> None:
         self._barcode_map = self.repository.load_barcodes("licai")
-        from app.models import Product, ChannelPrice
+        from app.models import Product, ChannelPrice, UnifiedProduct
         sku_set = {cp.sku for cp in ChannelPrice.query.filter_by(channel="licai").all()}
         products = Product.query.filter(Product.sku.in_(sku_set)).all()
         self._name_map = {p.sku: p.name for p in products}
+        # 從 unified_products 麗采通路取得最新包數價格與包數
+        licai_products = UnifiedProduct.query.filter_by(channel="麗采").all()
+        self._price_map = {
+            up.sku: float(up.pack_price)
+            for up in licai_products
+            if up.pack_price is not None
+        }
+        self._pack_map = {
+            up.sku: int(up.pack_size)
+            for up in licai_products
+            if up.pack_size is not None and up.pack_size > 0
+        }
         self._store_map = self._load_store_map()
 
     def _load_store_map(self) -> dict[str, dict]:
@@ -195,16 +209,21 @@ class LicaiConverter(BaseConverter):
             if not isinstance(row[0], (int, float)):  # 略過空列與欄位標題列
                 continue
             try:
-                barcode = str(row[1]).strip() if row[1] is not None else ""
-                price   = float(row[4]) if row[4] is not None else 0.0
-                qty     = int(row[5])   if row[5] is not None else 0
+                barcode   = str(row[1]).strip() if row[1] is not None else ""
+                xlsx_price = float(row[4]) if row[4] is not None else 0.0
+                qty       = int(row[5])   if row[5] is not None else 0
             except (TypeError, ValueError) as e:
                 errors.append(RowError(i, "data", str(row), str(e),
                                        source_file=f.name))
                 continue
 
-            sku  = self._barcode_map.get(barcode, "")
-            name = self._name_map.get(sku, str(row[2]) if row[2] else "")
+            sku   = self._barcode_map.get(barcode, "")
+            name  = self._name_map.get(sku, str(row[2]) if row[2] else "")
+            # 優先使用資料庫價格，找不到則 fallback 至 xlsx 市價
+            price = self._price_map.get(sku, xlsx_price) if sku else xlsx_price
+            # 數量 × 包數（DB 查無包數則 ×1）
+            pack  = self._pack_map.get(sku, 1) if sku else 1
+            qty   = qty * pack
 
             if not sku:
                 errors.append(RowError(
