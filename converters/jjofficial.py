@@ -33,7 +33,7 @@ SENDER = {
 OUTPUT_HEADER = [
     "訂單號碼", "收件人", "完整地址", "收件人電話號碼", "發票號碼",
     "商品貨號", "商品名稱", "數量", "商品結帳價", "商品折扣優惠",
-    "商品折扣金額", "加購折扣", "點數折現分攤", "出貨備註", "送貨編號", "付款方式",
+    "商品折扣金額", "點數折現分攤", "出貨備註", "送貨編號", "付款方式",
 ]
 
 CSV_HEADER = [
@@ -310,7 +310,7 @@ class JJOfficialConverter(BaseConverter):
                     r["order_id"], r["rcv_name"], r["address"], r["rcv_phone"],
                     r["invoice"],
                     r["sku"], r["name"], r["qty"], r["price"],
-                    0, r["discount"], r["addon_disc"], r["points"],
+                    0, r["discount"] + r["addon_disc"] + r["points"], 0,
                     r["note"], r["ship_no"], None,
                 ]
                 if r["is_family"]:
