@@ -146,10 +146,11 @@ class KadomoConverter(BaseConverter):
         phone     = store_info["電話"]
 
         # 欄位索引
-        b_col  = col_map.get("商品條碼")
-        n_col  = col_map.get("商品名稱")
-        q_col  = col_map.get("進貨數量")
-        po_col = col_map.get("採購單號")
+        b_col      = col_map.get("商品條碼")
+        n_col      = col_map.get("商品名稱")
+        q_col      = col_map.get("進貨數量")
+        po_col     = col_map.get("採購單號")
+        remark_col = col_map.get("採購單備註")
 
         output_rows: list[tuple] = []
         errors:      list[RowError] = []
@@ -159,6 +160,7 @@ class KadomoConverter(BaseConverter):
             name    = _cell_str(row, n_col)
             qty     = _cell(row, q_col)
             po_no   = _cell_str(row, po_col)
+            remark  = _cell_str(row, remark_col)
 
             # 跳過空列
             if not barcode and not name:
@@ -177,7 +179,7 @@ class KadomoConverter(BaseConverter):
 
             output_rows.append((
                 order_id, recipient, address, phone,
-                product_code, name, qty, price, po_no, "",
+                product_code, name, qty, price, remark, po_no,
             ))
 
         if not output_rows:
