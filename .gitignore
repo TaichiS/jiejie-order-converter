@@ -9,6 +9,7 @@ __pycache__/
 output/
 archive/
 logs/
+data/conversion.db
 
 # 本機路徑設定
 config.json

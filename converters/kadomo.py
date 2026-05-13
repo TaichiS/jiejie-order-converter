@@ -179,7 +179,7 @@ class KadomoConverter(BaseConverter):
 
             output_rows.append((
                 order_id, recipient, address, phone,
-                product_code, name, qty, price, remark, po_no,
+                product_code, name, qty, price, po_no, remark,
             ))
 
         if not output_rows:
