@@ -48,26 +48,35 @@ CSV_HEADER = [
 
 # 非標準品號 → 標準品號對照（來源：官網 CLAUDE.md）
 CODE_MAP: dict[str, str] = {
-    "G-0-1":     "F50100001",
-    "G-0-2":     "F50100002",
-    "G-0-4":     "F50100003",
-    "G-1-04":    "F50100081",
-    "G-1-06":    "F50100005",
-    "G-1P-01":   "F50100007",
-    "G-1P-13":   "F50100009",
-    "G-1P-14":   "F50100010",
-    "G-S2-01B":  "F50100016",
-    "G-S2-02A":  "F50100018",
-    "G-S2-02B":  "F50100017",
-    "G-S2-09R":  "F50100020",
-    "G-S2-10R":  "F50100019",
-    "G-S2-5A5B": "F50100013",
-    "GYN09":     "F50100014",
-    "N-1":       "F50200002",
-    "N-1-3":     "D51300001",
-    "1P-05-150": "D50300005",
-    "2-M3":      "D50600012",
-    "1-06":      "D50200006",
+    "G-0-1":          "F50100001",
+    "G-0-2":          "F50100002",
+    "G-0-4":          "F50100003",
+    "G-1-04":         "F50100081",
+    "G-1-06":         "F50100005",
+    "G-1P-01":        "F50100007",
+    "G-1P-05":        "F50100007",
+    "G-1P-13":        "F50100009",
+    "G-1P-14":        "F50100010",
+    "G-S2-01B":       "F50100016",
+    "G-S2-02A":       "F50100018",
+    "G-S2-02B":       "F50100017",
+    "G-S2-09R":       "F50100020",
+    "G-S2-10R":       "F50100019",
+    "G-S2-5A5B":      "F50100013",
+    "GYN09":          "F50100014",
+    "N-1":            "F50200002",
+    "N-1-3":          "D51300001",
+    "1P-05-150":      "D50300005",
+    "2-M3":           "D50600012",
+    "1-06":           "D50200006",
+    "4710586224054":  "F50100022",
+    "4710586223002":  "E52010007",
+}
+
+# 贈品代號 → 品號對照（商品貨號為空且名稱為「贈AXX*N份」格式時使用）
+GIFT_NAME_MAP: dict[str, str] = {
+    "A02": "D50800002",
+    "A10": "D50800010",
 }
 
 
@@ -156,9 +165,30 @@ class JJOfficialConverter(BaseConverter):
             input_qty  = int(_num(cell("數量") or 1))
             input_price = _num(cell("商品結帳價") or 0)
 
-            # 跳過無品號的贈品 / 促銷行
+            # 空品號自動補全（Pattern A / B），補不到才跳過
+            is_gift = False
             if not raw_sku:
-                continue
+                item_name = str(cell("商品名稱") or "").strip()
+                # Pattern A：名稱開頭就是品號（如 E52990001 母親節滿額贈...）
+                m_a = re.match(r"^\s*([A-Z]\d{8})", item_name)
+                # Pattern B：贈品（如 贈A02*1份）
+                m_b = re.match(r"^\s*贈\s*([A-Z]\d{1,3})\s*\*\s*(\d+)\s*[份包]", item_name)
+                if m_a:
+                    raw_sku = m_a.group(1)
+                elif m_b:
+                    gift_code = m_b.group(1)
+                    mapped = GIFT_NAME_MAP.get(gift_code)
+                    if mapped:
+                        raw_sku = mapped
+                        is_gift = True
+                    else:
+                        errors.append(RowError(row_idx, "商品貨號", item_name,
+                                               f"贈品代號 {gift_code!r} 在 GIFT_NAME_MAP 中找不到",
+                                               source_file=order_file.name))
+                        fail_count += 1
+                        continue
+                else:
+                    continue
 
             # 初始化訂單容器
             if order_id not in orders:
@@ -176,6 +206,12 @@ class JJOfficialConverter(BaseConverter):
             # 品號正規化：CODE_MAP → 去除零補位（2-01→2-1）→ 直接查 sku_map
             sku = CODE_MAP.get(raw_sku) or _depad_code(raw_sku, self._code_map) or raw_sku
             product = sku_map.get(sku)
+
+            # 數量倍率：名稱含「N包」或「贈AXX*N份」時乘上 N
+            item_name_for_qty = str(cell("商品名稱") or "").strip()
+            m_qty = re.search(r"(\d+)\s*[份包]", item_name_for_qty)
+            qty_multiplier = int(m_qty.group(1)) if m_qty and not is_addon else 1
+            input_qty = input_qty * qty_multiplier
 
             if is_addon:
                 # 加購品：從「寶寶粥官網-加購」查價格、包數與折扣
@@ -215,6 +251,10 @@ class JJOfficialConverter(BaseConverter):
                                                source_file=order_file.name))
                         fail_count += 1
                         continue
+
+            # 贈品（Pattern B）價格強制為 0
+            if is_gift:
+                unit_price = 0.0
 
             prod_name = product.get("品名", sku) if product else sku
 
@@ -279,11 +319,15 @@ class JJOfficialConverter(BaseConverter):
                     black_rows.append(row)
 
             if not o["is_family"]:
+                first_note = next(
+                    (r["note"] for r in o["rows"] if r.get("note")), None
+                )
                 cat_orders.append({
                     "rcv_name":  o["rcv_name"],
                     "rcv_phone": o["rcv_phone"],
                     "address":   o["address"] or "",
                     "order_id":  order_id,
+                    "note":      first_note or "",
                 })
 
         out_black  = _write_xlsx(self.output_dir.parent, self.source_type,
@@ -331,7 +375,7 @@ def _write_csv(base_dir: Path, source_type: str, date_obj: datetime,
         for o in orders:
             w.writerow([
                 o["rcv_name"], "", o["rcv_phone"], o["address"],
-                "", 1, 1, "",
+                "", 1, 1, o.get("note") or "1",
                 o["order_id"],
                 SENDER["deliver"],
                 ship_date, next_date,
