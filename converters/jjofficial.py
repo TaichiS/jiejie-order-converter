@@ -413,9 +413,12 @@ def _normalize_phone(raw: str) -> str:
 
 def _depad_code(raw: str, code_map: dict) -> str | None:
     """
-    嘗試去除零補位後在 code_map 中查詢，回傳對應品號或 None。
-    例：2-01 → 2-1 → 查到 D50500004 → 回傳 'D50500004'
+    在 code_map 中查詢品號，回傳對應品號或 None。
+    先直查（如 1-01 → D50200001），找不到再去除零補位（如 2-01 → 2-1）。
     """
+    product = code_map.get(raw)
+    if product:
+        return product.get("品號", "").strip() or None
     normalized = re.sub(r"-0+(\d)", r"-\1", raw)
     if normalized != raw:
         product = code_map.get(normalized)
