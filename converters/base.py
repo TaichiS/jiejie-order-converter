@@ -132,20 +132,40 @@ class BaseConverter(ABC):
             if scope else self._product_map
         )
 
-        # 1. 代碼前綴比對
+        # 1. 代碼前綴比對（code_map 每個 key 存 list，支援同代碼多規格）
+        def _pick_from_code(prods: list[dict]) -> dict | None:
+            """從候選清單中依 scope / amount 取最佳匹配。"""
+            if scope:
+                prods = [p for p in prods if str(p.get("品號", "")).startswith(scope)]
+            if not prods:
+                return None
+            if len(prods) == 1:
+                return prods[0]
+            # 多規格：用金額整除區分（如 150g/200g）
+            if amount > 0:
+                for p in prods:
+                    cp = float(p.get("商品結帳價") or 0)
+                    if cp > 0 and amount % cp == 0:
+                        return p
+            return prods[0]
+
         m = _CODE_RE.match(q)
         if m:
             code = m.group(1)
-            prod = self._code_map.get(code)
-            if prod and (not scope or str(prod.get("品號", "")).startswith(scope)):
-                return prod, []
+            prods = self._code_map.get(code)
+            if prods:
+                prod = _pick_from_code(prods)
+                if prod:
+                    return prod, []
 
         # 2. 蝦皮裸代碼（S11 → 2-S11）
         m2 = _BARE_CODE_RE.match(q)
         if m2:
-            prod = self._code_map.get("2-" + m2.group(1))
-            if prod and (not scope or str(prod.get("品號", "")).startswith(scope)):
-                return prod, []
+            prods = self._code_map.get("2-" + m2.group(1))
+            if prods:
+                prod = _pick_from_code(prods)
+                if prod:
+                    return prod, []
 
         # 3. 精確品名
         prod = pool.get(q)
