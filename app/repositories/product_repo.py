@@ -52,6 +52,12 @@ class ProductRepository:
         product_map: dict[str, dict] = {}
         code_map:    dict[str, dict] = {}
 
+        # code_map 儲存 list[dict]，支援同代碼多規格（如 150g/200g）
+        code_map: dict[str, list[dict]] = {}
+
+        def _add_code(code: str, row: dict) -> None:
+            code_map.setdefault(code, []).append(row)
+
         for up in rows:
             row = _to_dict(up)
             product_map[up.name] = row
@@ -65,13 +71,13 @@ class ProductRepository:
                     codes.append(m2.group(1))
 
             for code in codes:
-                code_map[code] = row
+                _add_code(code, row)
                 # 蝦皮：同時註冊帶 2- 與不帶 2- 的兩種 key，因訂單品名可能兩種格式都有
                 if source_type == "shopee":
                     if code.startswith("2-"):
-                        code_map[code[2:]] = row
+                        _add_code(code[2:], row)
                     elif re.match(r"^[A-Z]\d+$", code):
-                        code_map["2-" + code] = row
+                        _add_code("2-" + code, row)
 
         return product_map, code_map
 

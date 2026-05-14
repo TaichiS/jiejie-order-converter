@@ -114,15 +114,17 @@ class ShopeeConverter(BaseConverter):
 
             row[COL_PROD_ID]   = product["品號"]
             row[COL_OPTION]    = product["品名"]
-            row[COL_ORIG_PRICE]= checkout_price     # 每包單價
-            # COL_ACT_PRICE 保留 Order 原始值（份數定價）不動
+            row[COL_ORIG_PRICE]= act_price           # 份數定價（原始訂單值）
+            row[COL_ACT_PRICE] = checkout_price      # 每包單價
             row[COL_QTY]       = new_qty
 
-            # 4. 同訂單第二列起費用清零
+            # 4. 優惠券欄位全數清零（折扣只顯示 M 欄蝦幣折抵）
+            row[COL_COUPON] = 0
+
+            # 5. 同訂單第二列起費用清零
             if order_id in seen_orders:
                 row[COL_COIN]        = 0
                 row[COL_SHIPPING_FEE]= 0
-                row[COL_COUPON]      = 0
             else:
                 seen_orders.add(order_id)
 
