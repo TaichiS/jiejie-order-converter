@@ -156,7 +156,10 @@ class JJOfficialConverter(BaseConverter):
             is_family  = bool(family_no)
             address    = None if is_family else _parse_address(raw_addr)
             ship_no    = str(cell("送貨編號") or "").strip() or None
-            note       = str(cell("出貨備註") or "").strip() or None
+            order_note = str(cell("訂單備註") or "").strip()
+            ship_note  = str(cell("出貨備註") or "").strip()
+            note_parts = [n for n in [order_note, ship_note] if n]
+            note       = "；".join(note_parts) or None
             discount   = int(_num(cell("商品折扣金額")))
             points     = int(_num(cell("點數折現分攤")))
             freight    = _num(cell("運費"))
