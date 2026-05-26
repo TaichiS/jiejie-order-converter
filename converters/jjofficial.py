@@ -33,7 +33,7 @@ SENDER = {
 OUTPUT_HEADER = [
     "訂單號碼", "收件人", "完整地址", "收件人電話號碼", "發票號碼",
     "商品貨號", "商品名稱", "數量", "商品結帳價", "商品折扣優惠",
-    "商品折扣金額", "加購折扣", "點數折現分攤", "出貨備註", "送貨編號", "付款方式",
+    "商品折扣金額", "點數折現分攤", "出貨備註", "送貨編號", "付款方式",
 ]
 
 CSV_HEADER = [
@@ -310,7 +310,7 @@ class JJOfficialConverter(BaseConverter):
                     r["order_id"], r["rcv_name"], r["address"], r["rcv_phone"],
                     r["invoice"],
                     r["sku"], r["name"], r["qty"], r["price"],
-                    0, r["discount"], r["addon_disc"], r["points"],
+                    0, r["discount"] + r["addon_disc"] + r["points"], 0,
                     r["note"], r["ship_no"], None,
                 ]
                 if r["is_family"]:
@@ -413,9 +413,12 @@ def _normalize_phone(raw: str) -> str:
 
 def _depad_code(raw: str, code_map: dict) -> str | None:
     """
-    嘗試去除零補位後在 code_map 中查詢，回傳對應品號或 None。
-    例：2-01 → 2-1 → 查到 D50500004 → 回傳 'D50500004'
+    在 code_map 中查詢品號，回傳對應品號或 None。
+    先直查（如 1-01 → D50200001），找不到再去除零補位（如 2-01 → 2-1）。
     """
+    product = code_map.get(raw)
+    if product:
+        return product.get("品號", "").strip() or None
     normalized = re.sub(r"-0+(\d)", r"-\1", raw)
     if normalized != raw:
         product = code_map.get(normalized)

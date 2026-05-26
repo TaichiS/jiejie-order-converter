@@ -119,7 +119,10 @@ class A1LeageConverter(BaseConverter):
             skus       = _split(cell("貨號"))
             item_names = _split(cell("購買品項"))
             qtys       = _split(cell("數量"))
-            discount_total = sum(_num(d) for d in _split(cell("折扣金額")))
+            discount_total = (
+                sum(_num(d) for d in _split(cell("優惠券折扣金額"))) +
+                sum(_num(d) for d in _split(cell("活動折扣金額")))
+            )
 
             # 判斷哪個欄位代表「是否為組合包子品項（應跳過）」：
             #   有 商品單價 欄 → 用商品單價=0 判斷（2月/3月新格式）

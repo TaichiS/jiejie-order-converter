@@ -37,3 +37,5 @@ A1樂齡官網/黑貓印製托運單.csv
 
 # macOS
 .DS_Store
+
+data/conversion.db
