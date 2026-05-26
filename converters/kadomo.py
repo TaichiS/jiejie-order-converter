@@ -150,7 +150,7 @@ class KadomoConverter(BaseConverter):
         n_col      = col_map.get("商品名稱")
         q_col      = col_map.get("進貨數量")
         po_col     = col_map.get("採購單號")
-        remark_col = col_map.get("採購單備註")
+        remark_col = col_map.get("商品備註")
 
         output_rows: list[tuple] = []
         errors:      list[RowError] = []
