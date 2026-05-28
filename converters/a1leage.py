@@ -20,6 +20,9 @@ from app.utils import output_path
 COD_FEE_SKU   = "F59900003"
 COD_FEE_PRICE = 30
 
+FREIGHT_SKU   = "F59900001"
+FREIGHT_NAME  = "運費"
+
 SENDER = {
     "name":    "濬詮股份有限公司",
     "tel":     "05-5870993",
@@ -119,6 +122,7 @@ class A1LeageConverter(BaseConverter):
             skus       = _split(cell("貨號"))
             item_names = _split(cell("購買品項"))
             qtys       = _split(cell("數量"))
+            freight    = _num(cell("運費"))
             discount_total = (
                 sum(_num(d) for d in _split(cell("優惠券折扣金額"))) +
                 sum(_num(d) for d in _split(cell("活動折扣金額")))
@@ -158,10 +162,17 @@ class A1LeageConverter(BaseConverter):
 
                 prod_no    = product.get("品號", sku).strip()
                 prod_name  = product.get("品名", clean_name)
-                pack_count = int(_num(product.get("包數") or 1) or 1)
-                unit_price = (_num(product.get("份數價格")) if product.get("份數價格")
-                              else _num(product.get("商品結帳價") or 0))
-                output_qty = input_qty * pack_count
+                pack_count = int(_num(product.get("包數") or 0) or 0)
+                if pack_count > 0:
+                    # D/E 系列：展開包數，使用商品結帳價（單包價）
+                    output_qty = input_qty * pack_count
+                    unit_price = (_num(product.get("商品結帳價") or 0)
+                                  or _num(product.get("份數價格") or 0) / pack_count)
+                else:
+                    # 組合包（F 系列）：數量不變，使用份數價格
+                    output_qty = input_qty
+                    unit_price = (_num(product.get("份數價格") or 0)
+                                  or _num(product.get("商品結帳價") or 0))
 
                 xlsx_rows.append({
                     "order_id": order_id,
@@ -197,6 +208,23 @@ class A1LeageConverter(BaseConverter):
                     "name":     cod_name,
                     "qty":      1,
                     "price":    COD_FEE_PRICE,
+                    "discount": 0,
+                    "payment":  payment,
+                })
+
+            # 運費列（非貨到付款時顯示）
+            if freight > 0 and not is_cod:
+                freight_prod = sku_map.get(FREIGHT_SKU)
+                freight_name = freight_prod.get("品名") if freight_prod else FREIGHT_NAME
+                xlsx_rows.append({
+                    "order_id": order_id,
+                    "rcv_name": rcv_name,
+                    "address":  address,
+                    "rcv_phone": rcv_phone,
+                    "sku":      FREIGHT_SKU,
+                    "name":     freight_name,
+                    "qty":      1,
+                    "price":    int(freight),
                     "discount": 0,
                     "payment":  payment,
                 })

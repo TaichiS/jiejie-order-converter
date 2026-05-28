@@ -156,7 +156,10 @@ class JJOfficialConverter(BaseConverter):
             is_family  = bool(family_no)
             address    = None if is_family else _parse_address(raw_addr)
             ship_no    = str(cell("送貨編號") or "").strip() or None
-            note       = str(cell("出貨備註") or "").strip() or None
+            order_note = str(cell("訂單備註") or "").strip()
+            ship_note  = str(cell("出貨備註") or "").strip()
+            note_parts = [n for n in [order_note, ship_note] if n]
+            note       = "；".join(note_parts) or None
             discount   = int(_num(cell("商品折扣金額")))
             points     = int(_num(cell("點數折現分攤")))
             freight    = _num(cell("運費"))
@@ -285,6 +288,19 @@ class JJOfficialConverter(BaseConverter):
         for order_id, o in orders.items():
             item_rows = list(o["rows"])
 
+            # 同訂單折扣加總（放第一列，其餘為 0）
+            total_discount = sum(
+                r["discount"] + r["addon_disc"] + r["points"] for r in item_rows
+            )
+
+            # 同訂單備註合併（去重後以「；」連接）
+            seen_notes: list[str] = []
+            for r in item_rows:
+                n = r.get("note") or ""
+                if n and n not in seen_notes:
+                    seen_notes.append(n)
+            combined_note = "；".join(seen_notes) or None
+
             # 運費列附在訂單最後
             if o["freight"] > 0:
                 item_rows.append({
@@ -305,13 +321,15 @@ class JJOfficialConverter(BaseConverter):
                     "is_family": o["is_family"],
                 })
 
-            for r in item_rows:
+            for i, r in enumerate(item_rows):
+                is_first_row = (i == 0)
                 row = [
                     r["order_id"], r["rcv_name"], r["address"], r["rcv_phone"],
                     r["invoice"],
                     r["sku"], r["name"], r["qty"], r["price"],
-                    0, r["discount"] + r["addon_disc"] + r["points"], 0,
-                    r["note"], r["ship_no"], None,
+                    0, total_discount if is_first_row else 0, 0,
+                    combined_note if r["sku"] != FREIGHT_SKU else None,
+                    r["ship_no"], None,
                 ]
                 if r["is_family"]:
                     family_rows.append(row)
