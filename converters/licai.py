@@ -235,8 +235,8 @@ class LicaiConverter(BaseConverter):
             else:
                 success += 1
 
-            # 採購日期格式：YYYY/MM/DD
-            date_str = f"{order_date[:4]}/{order_date[4:6]}/{order_date[6:8]}" if len(order_date) == 8 else ""
+            # 採購日期格式：MMDD
+            date_str = order_date[4:8] if len(order_date) == 8 else ""
             ws_out.append([
                 order_id, store_full, address, phone,
                 sku, name, qty, price, date_str, None,
