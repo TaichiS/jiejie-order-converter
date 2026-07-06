@@ -167,6 +167,24 @@ class BaseConverter(ABC):
                 if prod:
                     return prod, []
 
+        # 2b. 系列字母代碼（如 2-D 無序號），在同系列品項中取名稱最相近者
+        m2b = re.match(r'^(\d+-[A-Z])', q)
+        if m2b:
+            from difflib import SequenceMatcher
+            series = m2b.group(1)
+            series_prods: list[dict] = []
+            for code_key, prods in self._code_map.items():
+                if code_key.startswith(series) and len(code_key) > len(series):
+                    filtered = (
+                        [p for p in prods if str(p.get("品號", "")).startswith(scope)]
+                        if scope else prods
+                    )
+                    series_prods.extend(filtered)
+            if series_prods:
+                best = max(series_prods,
+                           key=lambda p: SequenceMatcher(None, q, p.get("品名", "")).ratio())
+                return best, []
+
         # 3. 精確品名
         prod = pool.get(q)
         if prod:

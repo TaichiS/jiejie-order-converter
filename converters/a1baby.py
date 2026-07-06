@@ -40,7 +40,7 @@ D_PRICE_MAP = {119: "2-D01", 129: "2-D02", 149: "2-D03"}
 
 # 品名 key 擷取 regex（順序重要：2-M\d+ 必須在 2-M[S]? 之前）
 KEY_PATTERN = re.compile(
-    r"(1P-\d+|0-\d+|1-\d+|2-S\d+|2-M\d+|2-M[S]?|2-F|2-D0[123]|2-D|2-\d+|3-3|E52\d+)"
+    r"(1P-\d+|0-\d+|1-\d+|2-S\d+|2-M\d+|2-M[S]?|2-F|2-D0[123]|2-D|2-\d+|3-\d+|E52\d+)"
 )
 
 
@@ -197,7 +197,7 @@ class A1BabyConverter(BaseConverter):
                     "prod_no":      product["品號"],
                     "prod_name":    product["品名"],
                     "qty":          qty,
-                    "unit_price":   int(checkout_price),
+                    "unit_price":   int(checkout_price) if checkout_price == int(checkout_price) else round(checkout_price, 2),
                     "discount":     discount_total if is_first_item else 0,
                     "note":         note,
                     "payment":      payment,
@@ -313,14 +313,14 @@ class A1BabyConverter(BaseConverter):
             for p in [119, 129, 149]:
                 if amount % p == 0:
                     code = D_PRICE_MAP[p]
-                    prod = self._code_map.get(code)
-                    if prod:
-                        return prod, code
+                    prod_list = self._code_map.get(code)
+                    if prod_list:
+                        return prod_list[0], code
             for kw, code in (("水餃", "2-D01"), ("饅頭", "2-D02"), ("蘿蔔糕", "2-D03")):
                 if kw in pos_name:
-                    prod = self._code_map.get(code)
-                    if prod:
-                        return prod, code
+                    prod_list = self._code_map.get(code)
+                    if prod_list:
+                        return prod_list[0], code
 
         # 2. 提取代碼前綴
         key = _extract_key(pos_name)
@@ -351,9 +351,9 @@ class A1BabyConverter(BaseConverter):
             return (chosen[0] if chosen else all_1p[0]), key
 
         # 4. _code_map 直接取（涵蓋 0-N, 1-NN, 2-N, 2-SN, 2-MN, 3-N）
-        prod = self._code_map.get(key)
-        if prod:
-            return prod, key
+        prod_list = self._code_map.get(key)
+        if prod_list:
+            return prod_list[0], key
 
         # 5. 精確品名比對（如 2-M寶貝義大利麵 等不在 _code_map 的品項）
         if pos_name in self._product_map:

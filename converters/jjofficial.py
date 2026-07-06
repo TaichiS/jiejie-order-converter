@@ -19,6 +19,8 @@ from app.utils import output_path
 
 FREIGHT_SKU  = "F59900001"
 FREIGHT_NAME = "運費"
+EXTRA_SKU    = "F59900003"
+EXTRA_NAME   = "附加費"
 
 SENDER = {
     "name":    "濬詮股份有限公司",
@@ -34,6 +36,7 @@ OUTPUT_HEADER = [
     "訂單號碼", "收件人", "完整地址", "收件人電話號碼", "發票號碼",
     "商品貨號", "商品名稱", "數量", "商品結帳價", "商品折扣優惠",
     "商品折扣金額", "點數折現分攤", "出貨備註", "送貨編號", "付款方式",
+    "發票日期",
 ]
 
 CSV_HEADER = [
@@ -135,6 +138,7 @@ class JJOfficialConverter(BaseConverter):
 
         # 依訂單號碼收集資料（保持原始順序）
         orders: dict[str, dict] = {}
+        pending_discounts: dict[str, int] = {}   # 無品號列的折扣暫存（order_id → 累計折扣）
         errors: list[RowError]  = []
         success_count = 0
         fail_count    = 0
@@ -151,6 +155,13 @@ class JJOfficialConverter(BaseConverter):
             rcv_name   = str(cell("收件人") or "").strip()
             rcv_phone  = _normalize_phone(str(cell("收件人電話號碼") or ""))
             invoice    = str(cell("發票號碼") or "").strip() or None
+            inv_date_raw = cell("發票開立日期")
+            if inv_date_raw and hasattr(inv_date_raw, "strftime"):
+                invoice_date = inv_date_raw.strftime("%Y%m%d")
+            elif inv_date_raw:
+                invoice_date = re.sub(r"[^0-9]", "", str(inv_date_raw)[:10])
+            else:
+                invoice_date = None
             raw_addr   = str(cell("完整地址") or "")
             family_no  = str(cell("全家服務編號 / 7-11 店號") or "").strip()
             is_family  = bool(family_no)
@@ -160,9 +171,12 @@ class JJOfficialConverter(BaseConverter):
             ship_note  = str(cell("出貨備註") or "").strip()
             note_parts = [n for n in [order_note, ship_note] if n]
             note       = "；".join(note_parts) or None
-            discount   = int(_num(cell("商品折扣金額")))
+            discount   = (int(_num(cell("商品折扣金額")))
+                          + int(_num(cell("商品折扣優惠")))
+                          + int(_num(cell("折抵購物金"))))
             points     = int(_num(cell("點數折現分攤")))
             freight    = _num(cell("運費"))
+            extra      = _num(cell("附加費"))
             is_addon   = str(cell("加購品類型") or "").strip() == "主商品加購品"
             raw_sku    = str(cell("商品貨號") or "").strip()
             input_qty  = int(_num(cell("數量") or 1))
@@ -191,20 +205,31 @@ class JJOfficialConverter(BaseConverter):
                         fail_count += 1
                         continue
                 else:
+                    # 非商品列（如折扣彙總列）：擷取折扣後跳過
+                    if order_id and (discount != 0 or points != 0):
+                        pending_discounts[order_id] = (
+                            pending_discounts.get(order_id, 0) + discount + points
+                        )
                     continue
 
             # 初始化訂單容器
             if order_id not in orders:
                 orders[order_id] = {
-                    "rows":      [],
-                    "freight":   freight,
-                    "is_family": is_family,
-                    "rcv_name":  rcv_name,
-                    "rcv_phone": rcv_phone,
-                    "address":   address,
+                    "rows":         [],
+                    "freight":      freight,
+                    "extra":        extra,
+                    "is_family":    is_family,
+                    "rcv_name":     rcv_name,
+                    "rcv_phone":    rcv_phone,
+                    "address":      address,
+                    "invoice":      invoice,
+                    "invoice_date": invoice_date,
                 }
-            elif freight > 0:
-                orders[order_id]["freight"] = freight
+            else:
+                if freight > 0:
+                    orders[order_id]["freight"] = freight
+                if extra > 0:
+                    orders[order_id]["extra"] = extra
 
             # 品號正規化：CODE_MAP → 去除零補位（2-01→2-1）→ 直接查 sku_map
             sku = CODE_MAP.get(raw_sku) or _depad_code(raw_sku, self._code_map) or raw_sku
@@ -238,11 +263,11 @@ class JJOfficialConverter(BaseConverter):
                     if pack > 0:
                         # D/E 系列：展開包數，使用品號資料單包價
                         output_qty = input_qty * pack
-                        unit_price = ref_price if ref_price else input_price / pack
+                        unit_price = 0.0 if input_price == 0 else (ref_price if ref_price else input_price / pack)
                     else:
                         # 組合包（F 系列）：數量不變，價格用品號資料或輸入值
                         output_qty = input_qty
-                        unit_price = ref_price if ref_price else input_price
+                        unit_price = 0.0 if input_price == 0 else (ref_price if ref_price else input_price)
                 else:
                     # 品號找不到但 F 系列：直接通過
                     if sku.startswith("F"):
@@ -255,28 +280,29 @@ class JJOfficialConverter(BaseConverter):
                         fail_count += 1
                         continue
 
-            # 贈品（Pattern B）價格強制為 0
-            if is_gift:
+            # 贈品（Pattern B 或名稱含「贈品」）價格強制為 0
+            if is_gift or "贈品" in item_name_for_qty:
                 unit_price = 0.0
 
             prod_name = product.get("品名", sku) if product else sku
 
             orders[order_id]["rows"].append({
-                "order_id":  order_id,
-                "rcv_name":  rcv_name,
-                "address":   address,
-                "rcv_phone": rcv_phone,
-                "invoice":   invoice,
-                "sku":       sku,
-                "name":      prod_name,
-                "qty":       output_qty,
-                "price":     unit_price,
-                "discount":  discount,
-                "addon_disc": addon_disc,
-                "points":    points,
-                "note":      note,
-                "ship_no":   ship_no,
-                "is_family": is_family,
+                "order_id":     order_id,
+                "rcv_name":     rcv_name,
+                "address":      address,
+                "rcv_phone":    rcv_phone,
+                "invoice":      invoice,
+                "invoice_date": invoice_date,
+                "sku":          sku,
+                "name":         prod_name,
+                "qty":          output_qty,
+                "price":        unit_price,
+                "discount":     discount,
+                "addon_disc":   addon_disc,
+                "points":       points,
+                "note":         note,
+                "ship_no":      ship_no,
+                "is_family":    is_family,
             })
             success_count += 1
 
@@ -289,9 +315,10 @@ class JJOfficialConverter(BaseConverter):
             item_rows = list(o["rows"])
 
             # 同訂單折扣加總（放第一列，其餘為 0）
+            # pending_discounts 收錄無品號列（折扣彙總列）的折扣
             total_discount = sum(
                 r["discount"] + r["addon_disc"] + r["points"] for r in item_rows
-            )
+            ) + pending_discounts.get(order_id, 0)
 
             # 同訂單備註合併（去重後以「；」連接）
             seen_notes: list[str] = []
@@ -304,21 +331,42 @@ class JJOfficialConverter(BaseConverter):
             # 運費列附在訂單最後
             if o["freight"] > 0:
                 item_rows.append({
-                    "order_id":  order_id,
-                    "rcv_name":  o["rcv_name"],
-                    "address":   o["address"],
-                    "rcv_phone": o["rcv_phone"],
-                    "invoice":   None,
-                    "sku":       FREIGHT_SKU,
-                    "name":      FREIGHT_NAME,
-                    "qty":       1,
-                    "price":     int(o["freight"]),
-                    "discount":  0,
-                    "addon_disc": 0,
-                    "points":    0,
-                    "note":      None,
-                    "ship_no":   None,
-                    "is_family": o["is_family"],
+                    "order_id":     order_id,
+                    "rcv_name":     o["rcv_name"],
+                    "address":      o["address"],
+                    "rcv_phone":    o["rcv_phone"],
+                    "invoice":      o["invoice"],
+                    "invoice_date": o.get("invoice_date"),
+                    "sku":          FREIGHT_SKU,
+                    "name":         FREIGHT_NAME,
+                    "qty":          1,
+                    "price":        int(o["freight"]),
+                    "discount":     0,
+                    "addon_disc":   0,
+                    "points":       0,
+                    "note":         None,
+                    "ship_no":      None,
+                    "is_family":    o["is_family"],
+                })
+            # 附加費列
+            if o.get("extra", 0) > 0:
+                item_rows.append({
+                    "order_id":     order_id,
+                    "rcv_name":     o["rcv_name"],
+                    "address":      o["address"],
+                    "rcv_phone":    o["rcv_phone"],
+                    "invoice":      o["invoice"],
+                    "invoice_date": o.get("invoice_date"),
+                    "sku":          EXTRA_SKU,
+                    "name":         EXTRA_NAME,
+                    "qty":          1,
+                    "price":        int(o["extra"]),
+                    "discount":     0,
+                    "addon_disc":   0,
+                    "points":       0,
+                    "note":         None,
+                    "ship_no":      None,
+                    "is_family":    o["is_family"],
                 })
 
             for i, r in enumerate(item_rows):
@@ -330,6 +378,7 @@ class JJOfficialConverter(BaseConverter):
                     0, total_discount if is_first_row else 0, 0,
                     combined_note if r["sku"] != FREIGHT_SKU else None,
                     r["ship_no"], None,
+                    r.get("invoice_date"),
                 ]
                 if r["is_family"]:
                     family_rows.append(row)

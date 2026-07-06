@@ -153,6 +153,11 @@ class TuanmaConverter(BaseConverter):
                 # 品號查找
                 prod = sku_map.get(raw_code)
                 if prod is None:
+                    # 部分訂單商品貨號含品名（如 "E52010008 滴雞精"），嘗試只取前段品號
+                    m_sku = re.match(r'^([A-Za-z]\d{6,})', raw_code)
+                    if m_sku:
+                        prod = sku_map.get(m_sku.group(1))
+                if prod is None:
                     # 去除前綴：「團購限定A|」、「團購限定B|」或純「團購|」
                     clean_name = re.sub(r'^(?:團購限定[AB]|團購)\|', '', raw_name).strip()
                     # 將剩餘的 | 替換為 -（DB 中以 - 作分隔，如 寶寶義式冰淇淋-藍莓優格）

@@ -149,7 +149,7 @@ def _confirm_a1leage(path: Path) -> bool:
 
 
 def _confirm_tuanma(path: Path) -> bool:
-    """確認 xlsx 為其他團媽訂單（Sales 工作表 + 含「訂單備註」與「折抵購物金分攤」）"""
+    """確認 xlsx 為其他團媽訂單（Sales 工作表 + 含「全家服務編號」「運費」「附加費」）"""
     try:
         import openpyxl
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
@@ -161,8 +161,7 @@ def _confirm_tuanma(path: Path) -> bool:
             return False
         hdrs = {str(v).strip() for v in row if v}
         return {
-            "訂單號碼", "商品貨號", "全家服務編號 / 7-11 店號",
-            "折抵購物金分攤", "訂單備註",
+            "訂單號碼", "商品貨號", "全家服務編號 / 7-11 店號", "運費", "附加費",
         }.issubset(hdrs)
     except Exception:
         return False
