@@ -142,7 +142,11 @@ class XuantuConverter(BaseConverter):
                 raw_code = str(raw_code).strip()
 
                 # 品號查找：SKU 直查 → 短代碼正規化 → 品名查找
-                prod = sku_map.get(raw_code) or self._code_map.get(_normalize_code(raw_code))
+                # _code_map 每個 key 存 list[dict]（同代碼多規格），取第一筆
+                prod = sku_map.get(raw_code)
+                if prod is None:
+                    code_hits = self._code_map.get(_normalize_code(raw_code))
+                    prod = code_hits[0] if code_hits else None
                 if prod is None:
                     clean_name = raw_name.replace('團購限定B|', '').strip()
                     prod, candidates = self._lookup_by_name(clean_name)

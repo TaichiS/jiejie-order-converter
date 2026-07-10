@@ -37,6 +37,137 @@ start.bat
 
 ---
 
+## SHOPLINE 今日訂單下載
+
+`scripts/fetch_shopline_orders_today.py` 用於直接呼叫 SHOPLINE Open API，下載捷捷寶寶粥官網今日訂單，並整理成既有 `jjofficial` 轉換器可讀取的「捷捷官網轉換前」格式。
+
+此腳本的定位是 API 匯入前置工具，不會直接產生 ERP 檔案。它會先輸出一份原始 JSON 與一份 `Sales` 工作表 xlsx，後續仍交給既有捷捷官網轉換流程處理。
+
+### 參考文件
+
+- [SHOPLINE Open API：How to get access_token](https://open-api.docs.shoplineapp.com/docs/getting-started)
+- [SHOPLINE Open API：OpenAPI request example](https://open-api.docs.shoplineapp.com/docs/openapi-request-example)
+- [SHOPLINE Open API：Get Orders](https://open-api.docs.shoplineapp.com/docs/get-orders)
+- [SHOPLINE Open API：Get Order](https://open-api.docs.shoplineapp.com/docs/get-order)
+- [SHOPLINE Open API：Pagination](https://open-api.docs.shoplineapp.com/docs/pagination)
+
+### 環境變數
+
+先複製 `.env.example` 為 `.env`，再填入 SHOPLINE token：
+
+```bash
+cp .env.example .env
+```
+
+`.env` 至少需要：
+
+```env
+SHOPLINE_ACCESS_TOKEN=replace_with_real_shopline_open_api_token
+SHOPLINE_USER_AGENT=JiejieOrderConverter/0.1
+```
+
+- `SHOPLINE_ACCESS_TOKEN`：從 SHOPLINE 後台「設定 > 管理員設定 > API Auth」產生。
+- `SHOPLINE_USER_AGENT`：SHOPLINE Open API 必帶的 `User-Agent` header；若 SHOPLINE 有提供 handle code，請改填該值。
+- `.env` 已加入 `.gitignore`，不可提交實際 token。
+
+### 基本用法
+
+下載台北時間今天的訂單，預設輸出到相對路徑 `測試資料/`：
+
+```bash
+uv run python "scripts/fetch_shopline_orders_today.py"
+```
+
+只顯示統計、不顯示訂單摘要：
+
+```bash
+uv run python "scripts/fetch_shopline_orders_today.py" --show 0
+```
+
+指定台北日期：
+
+```bash
+uv run python "scripts/fetch_shopline_orders_today.py" --date 2026-06-22
+```
+
+指定輸出資料夾：
+
+```bash
+uv run python "scripts/fetch_shopline_orders_today.py" --output-dir "測試資料"
+```
+
+### 輸出檔案
+
+未指定輸出檔名時，腳本會產生：
+
+```text
+測試資料/shopline_orders_YYYYMMDD_raw.json
+測試資料/YYYYMMDD捷捷官網轉換前.xlsx
+```
+
+- `shopline_orders_YYYYMMDD_raw.json`：SHOPLINE API 原始回應，包含完整訂單資料，可能含客戶個資，只供除錯與欄位 mapping 使用。
+- `YYYYMMDD捷捷官網轉換前.xlsx`：整理後的 `Sales` 工作表，可被 `detector` 辨識為 `jjofficial`，供既有捷捷官網轉換器使用。
+
+自訂輸出檔名：
+
+```bash
+uv run python "scripts/fetch_shopline_orders_today.py" \
+  --output-json "測試資料/shopline_orders_20260622_raw.json" \
+  --output-xlsx "測試資料/20260622捷捷官網轉換前.xlsx"
+```
+
+### 訂單篩選與時間處理
+
+- SHOPLINE Open API 的時間參數使用 UTC。
+- 腳本接受台北日期，會自動換算成 UTC 區間。
+- 預設查詢 `created_after` / `created_before`，也就是「指定台北日期建立的訂單」。
+- 預設不把 `status=cancelled` 的取消訂單寫入 xlsx，但原始 JSON 仍會完整保存。
+- 如需把取消訂單也寫入 xlsx，可加上：
+
+```bash
+uv run python "scripts/fetch_shopline_orders_today.py" --include-cancelled
+```
+
+### 參數說明
+
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `--date` | 今天 | 指定台北日期，格式 `YYYY-MM-DD` |
+| `--per-page` | `50` | 每頁訂單數，會限制在 1 到 50 |
+| `--max-pages` | `10` | 最多抓取頁數，避免測試時抓取過量資料 |
+| `--show` | `10` | 顯示前 N 筆安全摘要；設為 `0` 可隱藏明細 |
+| `--output-dir` | `測試資料` | 預設輸出資料夾，使用相對路徑 |
+| `--output-json` | 自動產生 | 自訂原始 JSON 輸出路徑 |
+| `--output-xlsx` | 自動產生 | 自訂捷捷官網轉換前 xlsx 輸出路徑 |
+| `--include-cancelled` | 關閉 | xlsx 是否包含取消訂單 |
+
+### 整理後 xlsx 欄位
+
+腳本會建立 `Sales` 工作表，並輸出捷捷官網轉換器目前需要的欄位：
+
+```text
+訂單號碼、訂單狀態、付款狀態、收件人、完整地址、收件人電話號碼、發票號碼、
+商品貨號、商品名稱、數量、商品結帳價、商品折扣優惠、商品折扣金額、
+點數折現分攤、出貨備註、送貨編號、付款方式、全家服務編號 / 7-11 店號、
+加購品類型、訂單備註、發票開立日期、運費
+```
+
+其中 `全家服務編號 / 7-11 店號` 會取 SHOPLINE `delivery_data.location_code`。有值時後續轉換會進全家檔，無值時會進黑貓檔。
+
+### 後續轉換
+
+產生 `測試資料/YYYYMMDD捷捷官網轉換前.xlsx` 後，可用既有網頁工具掃描該資料夾並執行轉換，或透過現有服務流程強制指定 `jjofficial`。
+
+若轉換結果出現 `partial`，通常代表品號資料庫缺少 SHOPLINE 商品品號。此時應先補 `品號資料統整.csv` 並重新匯入品號資料，再重新轉換。
+
+### 安全注意事項
+
+- 不要提交 `.env`。
+- 不要提交 `測試資料/` 內的 JSON 或 xlsx，這些檔案可能包含客戶姓名、電話、地址與訂單明細。
+- 若只要檢查 API 是否可用，建議使用 `--show 0`，避免終端輸出過多訂單資料。
+
+---
+
 ## 專案結構
 
 ```

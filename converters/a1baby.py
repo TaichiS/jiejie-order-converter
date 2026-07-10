@@ -297,6 +297,24 @@ class A1BabyConverter(BaseConverter):
             status        = status,
         )
 
+    def _code_lookup(self, code: str, amount: float = 0) -> dict | None:
+        """
+        從 _code_map 取單一品號。
+        _code_map 每個 key 存 list[dict]（支援同代碼多規格，如 150g/200g），
+        依金額整除挑選；多筆無法區分時取第一筆。找不到回傳 None。
+        """
+        prods = self._code_map.get(code)
+        if not prods:
+            return None
+        if len(prods) == 1:
+            return prods[0]
+        if amount > 0:
+            for p in prods:
+                cp = float(p.get("商品結帳價") or 0)
+                if cp > 0 and amount % cp == 0:
+                    return p
+        return prods[0]
+
     def _match_product(self, pos_name: str, amount: float) -> tuple[dict | None, str]:
         """
         從 POS 品名 + 金額 找對應的品號資料。
@@ -313,12 +331,12 @@ class A1BabyConverter(BaseConverter):
             for p in [119, 129, 149]:
                 if amount % p == 0:
                     code = D_PRICE_MAP[p]
-                    prod = self._code_map.get(code)
+                    prod = self._code_lookup(code, amount)
                     if prod:
                         return prod, code
             for kw, code in (("水餃", "2-D01"), ("饅頭", "2-D02"), ("蘿蔔糕", "2-D03")):
                 if kw in pos_name:
-                    prod = self._code_map.get(code)
+                    prod = self._code_lookup(code, amount)
                     if prod:
                         return prod, code
 
@@ -351,7 +369,7 @@ class A1BabyConverter(BaseConverter):
             return (chosen[0] if chosen else all_1p[0]), key
 
         # 4. _code_map 直接取（涵蓋 0-N, 1-NN, 2-N, 2-SN, 2-MN, 3-N）
-        prod = self._code_map.get(key)
+        prod = self._code_lookup(key, amount)
         if prod:
             return prod, key
 
