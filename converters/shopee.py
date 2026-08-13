@@ -89,18 +89,24 @@ class ShopeeConverter(BaseConverter):
                 continue
             order_id     = str(row[COL_ORDER_ID]) if row[COL_ORDER_ID] else ""
             full_name    = str(row[COL_PRODUCT])  if row[COL_PRODUCT]  else ""
+            option_name  = str(row[COL_OPTION])   if row[COL_OPTION]   else ""
             qty_order    = row[COL_QTY] or 0
 
-            # 1. 從完整品名提取短品名（去前綴、去 | 後面、正規化空格）
-            short_name = _extract_short_name(full_name)
-
-            # 2. 查品號資料（代碼前綴 → 精確品名 → 模糊比對 + 金額整除）
+            # 1. 蝦皮同一商品頁可能有多個選項；選項名稱才是實際下單品項。
+            #    先查選項，無法命中時才回退到商品名稱。
             act_price = float(row[COL_ACT_PRICE]) if row[COL_ACT_PRICE] else 0
-            product, candidates = self._lookup_by_name(short_name, amount=act_price)
+            lookup_names = _build_lookup_names(option_name, full_name)
+            product = None
+            candidates = []
+            for short_name in lookup_names:
+                product, candidates = self._lookup_by_name(short_name, amount=act_price)
+                if product:
+                    break
             if not product:
+                searched = "、".join(f"「{name}」" for name in lookup_names)
                 errors.append(RowError(
-                    row_idx, "商品名稱", full_name,
-                    f"找不到「{short_name}」",
+                    row_idx, "商品名稱／選項名稱", full_name,
+                    f"找不到 {searched}",
                     candidates=candidates,
                     source_file=order_file.name,
                 ))
@@ -165,6 +171,16 @@ def _extract_short_name(full_name: str) -> str:
     # 移除所有空白
     name = re.sub(r"\s+", "", name)
     return name.strip()
+
+
+def _build_lookup_names(option_name: str, full_name: str) -> list[str]:
+    """建立蝦皮品項查詢順序：實際選項優先，商品主標題作為備援。"""
+    names = []
+    for raw_name in (option_name, full_name):
+        name = _extract_short_name(raw_name)
+        if name and name not in {"-", "無規格"} and name not in names:
+            names.append(name)
+    return names
 
 
 def _parse_date(order_date: str):

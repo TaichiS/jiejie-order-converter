@@ -9,7 +9,9 @@ import re
 
 from app.models import UnifiedProduct
 
-_CODE_RE      = re.compile(r'^(\d+[A-Z]?-[A-Z]?\d+)')
+_CODE_RE      = re.compile(
+    r'^(\d+[A-Z]?-[A-Z]?\d+|2-MS(?![A-Z0-9])|2-M(?![A-Z0-9]))'
+)
 _BARE_CODE_RE = re.compile(r'^([A-Z]\d+)')
 
 
