@@ -46,7 +46,9 @@ def open_xlsx(path: Path, password: str | None = None,
 # \d+[A-Z]? = 前段（數字 + 可選字母，如 1P）
 # -[A-Z]?   = 連字號 + 可選系列字母（如 S、D、M）
 # \d+        = 後段序號
-_CODE_RE      = re.compile(r'^(\d+[A-Z]?-[A-Z]?\d+)')
+_CODE_RE      = re.compile(
+    r'^(\d+[A-Z]?-[A-Z]?\d+|2-MS(?![A-Z0-9])|2-M(?![A-Z0-9]))'
+)
 # 蝦皮特例：缺少「2-」前綴的燉飯/義麵代碼，如 S11、M3
 _BARE_CODE_RE = re.compile(r'^([A-Z]\d+)')
 
