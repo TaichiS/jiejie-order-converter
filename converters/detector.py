@@ -132,18 +132,31 @@ def _confirm_a1baby(main: Path, detail: Path) -> bool:
 
 
 def _confirm_a1leage(path: Path) -> bool:
-    """確認 xlsx 為 A1樂齡官網訂單（Orders 工作表 + 特有欄位名稱組合）"""
+    """確認 xlsx 為樂齡官網訂單（支援舊 Orders 與新版 Sales 格式）。"""
     try:
         import openpyxl
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        if "Orders" not in wb.sheetnames:
+        if "Orders" in wb.sheetnames:
+            ws = wb["Orders"]
+            row = next(ws.iter_rows(max_row=1, values_only=True), None)
+            if not row:
+                return False
+            hdrs = {str(v).strip() for v in row if v}
+            return {"貨號", "收件人地址", "購買品項"}.issubset(hdrs)
+
+        # 新版樂齡下載檔與前台同為 Sales 格式，欄位本身無法和捷捷官網
+        # 完全區分，因此以使用者下載檔／資料夾中的「樂齡」名稱作為識別依據。
+        if "Sales" not in wb.sheetnames or "樂齡" not in str(path):
             return False
-        ws   = wb["Orders"]
+        ws = wb["Sales"]
         row  = next(ws.iter_rows(max_row=1, values_only=True), None)
         if not row:
             return False
         hdrs = {str(v).strip() for v in row if v}
-        return {"貨號", "收件人地址", "購買品項"}.issubset(hdrs)
+        return {
+            "訂單號碼", "商品貨號", "收件人", "收件人電話號碼",
+            "全家服務編號 / 7-11 店號", "送貨方式",
+        }.issubset(hdrs)
     except Exception:
         return False
 

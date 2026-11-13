@@ -2,7 +2,7 @@
 converters/leage.py
 樂齡網訂單轉換器。
 輸入：PDF 採購單（多張）
-輸出：{MMDD}樂齡.xlsx + 黑貓託運單_{MMDD}.csv
+輸出：鼎新-樂齡信{MMDD}.xlsx + 黑貓託運單{MMDD}.csv
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from converters.base import BaseConverter, ConversionResult, RowError
 from app.utils import output_path
 
 SENDER = {
-    "name":    "濬詮股份有限公司",
+    "name":    "賦寶股份有限公司",
     "tel":     "05-5870993",
     "mobile":  "0909-870-993",
     "address": "雲林縣莿桐鄉大美村溪美22-3號1樓",
@@ -88,16 +88,12 @@ class LeageConverter(BaseConverter):
         # 依 PO 尾碼排序
         orders.sort(key=lambda o: _po_suffix(o.get("po_number", "")))
 
-        # 取 MMDD 供檔名（從交貨日）
+        # 檔名與訂單編號日期使用實際上傳／執行轉換的當天日期，
+        # 不受 PDF 檔名或交貨日期影響。
         delivery_date = first_delivery_date  # YYYY/MM/DD
-        try:
-            dt = datetime.strptime(delivery_date, "%Y/%m/%d")
-            mmdd_str = dt.strftime("%m%d")
-            order_date_str = dt.strftime("%Y%m%d")
-        except (ValueError, TypeError):
-            mmdd_str = "0000"
-            dt = datetime.today()
-            order_date_str = dt.strftime("%Y%m%d")
+        dt = datetime.today()
+        mmdd_str = dt.strftime("%m%d")
+        order_date_str = dt.strftime("%Y%m%d")
 
         # 指派訂單編號
         for seq, order in enumerate(orders, start=1):
@@ -109,13 +105,13 @@ class LeageConverter(BaseConverter):
 
         p = _save_leage_xlsx(
             self.output_dir.parent, self.source_type, date_obj,
-            f"{mmdd_str}樂齡.xlsx", orders, delivery_date
+            f"鼎新-樂齡信{mmdd_str}.xlsx", orders, delivery_date
         )
         output_files.append(p)
 
         p = _save_leage_csv(
             self.output_dir.parent, self.source_type, date_obj,
-            f"黑貓託運單_{mmdd_str}.csv", orders
+            f"黑貓託運單{mmdd_str}.csv", orders
         )
         output_files.append(p)
 
@@ -310,10 +306,10 @@ def _save_leage_csv(base_dir: Path, source_type: str, date_obj: datetime,
     with open(p, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(csv_header)
+        # 黑貓託運單日期一律以實際轉單當天為出貨日，隔天為預定配達日。
+        ship_date_fmt = date_obj.strftime("%Y/%m/%d")
+        ship_date_next = (date_obj + timedelta(days=1)).strftime("%Y/%m/%d")
         for order in orders:
-            delivery = order.get("delivery_date", "")
-            ship_date_fmt  = _fmt_date_yyyymmdd(delivery)
-            ship_date_next = _date_plus1(ship_date_fmt)
             # 黑貓手機欄：去掉 leading 0
             phone_raw = str(order["phone"]).lstrip("0")
             writer.writerow([

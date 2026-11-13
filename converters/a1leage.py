@@ -1,42 +1,41 @@
-"""
-converters/a1leage.py
-樂齡官網訂單轉換器。
-輸入：後台匯出 xlsx（工作表 Orders）
-輸出：MMDD.xlsx（Sheet1, 15欄）+ MMDD黑貓.csv
-"""
+"""樂齡官網：讀取前台 Sales 格式並輸出鼎新與三種物流檔。"""
 from __future__ import annotations
 
 import csv
+import math
 import re
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import openpyxl
 from openpyxl import Workbook
 
-from converters.base import BaseConverter, ConversionResult, RowError
 from app.utils import output_path
+from converters.base import BaseConverter, ConversionResult, RowError
 
-COD_FEE_SKU   = "F59900003"
+COD_FEE_SKU = "F59900003"
 COD_FEE_PRICE = 30
+FREIGHT_SKU = "F59900001"
+FREIGHT_NAME = "運費"
 
-FREIGHT_SKU   = "F59900001"
-FREIGHT_NAME  = "運費"
-
-SENDER = {
-    "name":    "濬詮股份有限公司",
-    "tel":     "05-5870993",
-    "mobile":  "0909-870-993",
-    "address": "雲林縣莿桐鄉大美村溪美22-3號1樓",
-    "temp":    "3",
-    "size":    "2",
-    "deliver": "4",
+# 樂齡官網前台活動貨號 → 鼎新品號
+SKU_ALIASES = {
+    "N1HF00003340999": "E52990008",
 }
+
+BLACKCAT_SENDER = {
+    "name": "賦寶股份有限公司", "tel": "05-5870993",
+    "mobile": "0909-870-993", "address": "雲林縣莿桐鄉大美村溪美22-3號1樓",
+    "temp": "3", "size": "2", "deliver": "4",
+}
+FAMILY_SENDER = {**BLACKCAT_SENDER, "name": "濬詮股份有限公司"}
 
 OUTPUT_HEADER = [
     "訂單號碼", "收件人", "完整地址", "收件人電話號碼", "發票號碼",
     "商品貨號", "商品名稱", "數量", "商品結帳價", "商品折扣優惠",
     "商品折扣金額", "點數折現分攤", "出貨備註", "送貨編號", "付款方式",
+    "發票日期",
 ]
 
 CSV_HEADER = [
@@ -51,298 +50,314 @@ CSV_HEADER = [
 
 
 class A1LeageConverter(BaseConverter):
-
     @property
     def source_type(self) -> str:
         return "a1leage"
 
     def _validate(self, input_files: list[Path]) -> list[RowError]:
-        xlsx = [f for f in input_files if f.suffix.lower() == ".xlsx"]
-        if not xlsx:
+        files = [f for f in input_files if f.suffix.lower() == ".xlsx"]
+        if not files:
             return [RowError(0, "file", "", "找不到 .xlsx 訂單檔")]
         try:
-            wb = openpyxl.load_workbook(xlsx[0], read_only=True, data_only=True)
-            if "Orders" not in wb.sheetnames:
-                return [RowError(0, "sheet", xlsx[0].name, "工作表 'Orders' 不存在",
-                                 source_file=xlsx[0].name)]
-        except Exception as e:
-            return [RowError(0, "file", xlsx[0].name, f"無法開啟：{e}",
-                             source_file=xlsx[0].name)]
+            wb = openpyxl.load_workbook(files[0], read_only=True, data_only=True)
+            if "Sales" not in wb.sheetnames:
+                return [RowError(
+                    0, "sheet", files[0].name,
+                    "工作表 'Sales' 不存在，請上傳與前台相同格式的訂單檔",
+                    source_file=files[0].name,
+                )]
+        except Exception as exc:
+            return [RowError(0, "file", files[0].name, f"無法開啟：{exc}",
+                             source_file=files[0].name)]
         return []
 
     def _process(self, input_files: list[Path]) -> ConversionResult:
         order_file = next(f for f in input_files if f.suffix.lower() == ".xlsx")
-        wb_in  = openpyxl.load_workbook(order_file, read_only=True, data_only=True)
-        ws_in  = wb_in["Orders"]
-        all_rows = list(ws_in.iter_rows(values_only=True))
-
-        # 由標題列動態取得欄位索引（應對不同版本匯出格式）
-        cm = {str(v).strip(): i for i, v in enumerate(all_rows[0]) if v}
-
-        # 取訂單日期
-        order_date = ""
-        for raw in all_rows[1:]:
-            d = raw[cm.get("訂購日期", 1)]
-            if d:
-                order_date = d.strftime("%Y%m%d") if hasattr(d, "strftime") else str(d)[:10].replace("-", "")
-                break
-        try:
-            date_obj = datetime.strptime(order_date, "%Y%m%d")
-        except (ValueError, TypeError):
-            date_obj = datetime.today()
-            order_date = date_obj.strftime("%Y%m%d")
-        mmdd = order_date[4:8]
-
-        # 品號索引（stripped 品號 → product）
+        wb_in = openpyxl.load_workbook(order_file, read_only=True, data_only=True)
+        ws_in = wb_in["Sales"]
+        all_rows = [r for r in ws_in.iter_rows(values_only=True)
+                    if any(v is not None for v in r)]
+        cm = {str(v).strip(): i for i, v in enumerate(all_rows[0]) if v is not None}
         sku_map = {
-            v.get("品號", "").strip(): v
-            for v in self._product_map.values()
+            v.get("品號", "").strip(): v for v in self._product_map.values()
             if v.get("品號", "").strip()
         }
 
-        xlsx_rows: list[dict]  = []
-        csv_orders: list[dict] = []
+        date_obj = datetime.today()
+        order_date = date_obj.strftime("%Y%m%d")
+        label = _date_label(order_file.stem, date_obj)
+        invoice_date = _invoice_date_from_label(label, date_obj)
+
+        orders: OrderedDict[str, dict] = OrderedDict()
         errors: list[RowError] = []
         success_count = 0
-        fail_count    = 0
+        fail_count = 0
 
         for row_idx, raw in enumerate(all_rows[1:], start=2):
-            row = list(raw)
+            def cell(name: str, default=None):
+                idx = cm.get(name)
+                return raw[idx] if idx is not None and idx < len(raw) else default
 
-            def cell(col_name: str, default=""):
-                idx = cm.get(col_name)
-                return row[idx] if idx is not None and idx < len(row) else default
-
-            order_id  = str(cell("訂單編號") or "").strip()
-            rcv_name  = str(cell("收件人姓名") or "").strip()
-            rcv_phone = str(cell("收件人手機") or "").strip()
-            payment   = str(cell("付費方式") or "").strip()
-            address   = _parse_address(str(cell("收件人地址") or ""))
-
-            skus       = _split(cell("貨號"))
-            item_names = _split(cell("購買品項"))
-            qtys       = _split(cell("數量"))
-            freight    = _num(cell("運費"))
-            discount_total = (
-                sum(_num(d) for d in _split(cell("優惠券折扣金額"))) +
-                sum(_num(d) for d in _split(cell("活動折扣金額")))
-            )
-
-            # 判斷哪個欄位代表「是否為組合包子品項（應跳過）」：
-            #   有 商品單價 欄 → 用商品單價=0 判斷（2月/3月新格式）
-            #   否則          → 用商品原價=0 判斷（舊格式）
-            if "商品單價" in cm:
-                skip_prices = _split(cell("商品單價"))
-            else:
-                skip_prices = _split(cell("商品原價"))
-
-            is_first   = True
-            has_error  = False
-            order_subtotal = 0.0
-
-            for i, sku in enumerate(skus):
-                skip_price = _num(skip_prices[i] if i < len(skip_prices) else 0)
-                if skip_price == 0:
-                    continue  # 跳過組合包子品項
-
-                input_qty  = int(_num(qtys[i])) if i < len(qtys) else 1
-                raw_name   = item_names[i] if i < len(item_names) else ""
-                clean_name = re.sub(r"^捷捷樂齡食品-\s*", "", raw_name).strip()
-
-                product = sku_map.get(sku.strip()) or self._product_map.get(clean_name)
-                if not product:
-                    errors.append(RowError(
-                        row_idx, "貨號", sku,
-                        f"品號 {sku!r}（{clean_name}）在品號資料中找不到",
-                        source_file=order_file.name,
-                    ))
-                    has_error = True
-                    fail_count += 1
-                    continue
-
-                prod_no    = product.get("品號", sku).strip()
-                prod_name  = product.get("品名", clean_name)
-                pack_count = int(_num(product.get("包數") or 0) or 0)
-                if pack_count > 0:
-                    # D/E 系列：展開包數，使用商品結帳價（單包價）
-                    output_qty = input_qty * pack_count
-                    unit_price = (_num(product.get("商品結帳價") or 0)
-                                  or _num(product.get("份數價格") or 0) / pack_count)
-                else:
-                    # 組合包（F 系列）：數量不變，使用份數價格
-                    output_qty = input_qty
-                    unit_price = (_num(product.get("份數價格") or 0)
-                                  or _num(product.get("商品結帳價") or 0))
-
-                xlsx_rows.append({
-                    "order_id": order_id,
-                    "rcv_name": rcv_name,
-                    "address":  address,
-                    "rcv_phone": rcv_phone,
-                    "sku":      prod_no,
-                    "name":     prod_name,
-                    "qty":      output_qty,
-                    "price":    unit_price,
-                    "discount": int(discount_total) if is_first else 0,
-                    "payment":  payment,
-                })
-                order_subtotal += unit_price * output_qty
-                is_first        = False
-                success_count  += 1
-
-            if has_error:
+            order_id = str(cell("訂單號碼") or "").strip()
+            if not order_id:
+                continue
+            raw_sku = str(cell("商品貨號") or "").strip()
+            raw_name = str(cell("商品名稱") or "").strip()
+            if not raw_sku:  # 折扣彙總等非商品列
                 continue
 
-            is_cod = "貨到付款" in payment
+            lookup_sku = SKU_ALIASES.get(raw_sku, raw_sku)
+            product = sku_map.get(lookup_sku)
+            if not product:
+                errors.append(RowError(
+                    row_idx, "商品貨號", raw_sku,
+                    f"品號 {raw_sku!r}（{raw_name}）在樂齡官網品號資料中找不到",
+                    source_file=order_file.name,
+                ))
+                fail_count += 1
+                continue
 
-            # 貨到付款補手續費
-            if is_cod:
-                cod_prod  = sku_map.get(COD_FEE_SKU)
-                cod_name  = cod_prod.get("品名") if cod_prod else "黑貓貨到付款手續費"
-                xlsx_rows.append({
-                    "order_id": order_id,
-                    "rcv_name": rcv_name,
-                    "address":  address,
-                    "rcv_phone": rcv_phone,
-                    "sku":      COD_FEE_SKU,
-                    "name":     cod_name,
-                    "qty":      1,
-                    "price":    COD_FEE_PRICE,
-                    "discount": 0,
-                    "payment":  payment,
-                })
+            rcv_name = str(cell("收件人") or "").strip()
+            rcv_phone = _normalize_phone(str(cell("收件人電話號碼") or ""))
+            family_no = str(cell("全家服務編號 / 7-11 店號") or "").strip()
+            is_family = bool(family_no)
+            shipping = str(cell("送貨方式") or "").strip()
+            is_cod = ("貨到付款" in shipping) and not is_family
+            address = None if is_family else _parse_front_address(str(cell("完整地址") or ""))
+            order_note = str(cell("訂單備註") or "").strip()
+            ship_note = str(cell("出貨備註") or "").strip()
+            note = "；".join(n for n in [order_note, ship_note] if n) or None
+            freight = _num(cell("運費"))
+            input_qty = int(_num(cell("數量") or 1) or 1)
+            input_price = _num(cell("商品結帳價") or 0)
 
-            # 運費列（非貨到付款時顯示）
-            if freight > 0 and not is_cod:
-                freight_prod = sku_map.get(FREIGHT_SKU)
-                freight_name = freight_prod.get("品名") if freight_prod else FREIGHT_NAME
-                xlsx_rows.append({
-                    "order_id": order_id,
-                    "rcv_name": rcv_name,
-                    "address":  address,
-                    "rcv_phone": rcv_phone,
-                    "sku":      FREIGHT_SKU,
-                    "name":     freight_name,
-                    "qty":      1,
-                    "price":    int(freight),
-                    "discount": 0,
-                    "payment":  payment,
-                })
+            pack_count = int(_num(product.get("包數") or 0) or 0)
+            if pack_count > 0:
+                output_qty = input_qty * pack_count
+                ref_price = _num(product.get("商品結帳價") or 0)
+                unit_price = 0.0 if input_price == 0 else (
+                    ref_price if ref_price else input_price / pack_count
+                )
+            else:
+                output_qty = input_qty
+                ref_price = _num(product.get("份數價格") or 0)
+                unit_price = 0.0 if input_price == 0 else (
+                    ref_price if ref_price else input_price
+                )
 
-            cod_amount = int(order_subtotal - discount_total + COD_FEE_PRICE) if is_cod else ""
-            csv_orders.append({
-                "rcv_name":  rcv_name,
-                "rcv_phone": rcv_phone,
-                "address":   address,
-                "order_id":  order_id,
-                "cod":       cod_amount,
+            # 原單 D 欄「優惠折扣」對應鼎新 J 欄「商品折扣優惠」。
+            discount_offer = int(_num(cell("優惠折扣")))
+            # 鼎新 K 欄須包含商品折扣、全單折扣與購物金分攤。
+            product_discount = int(
+                _num(cell("商品折扣金額"))
+                + _num(cell("全單折扣金額"))
+                + _num(cell("折抵購物金分攤"))
+            )
+            shopping_credit = int(_num(cell("折抵購物金")))
+            shopping_credit_share = int(_num(cell("折抵購物金分攤")))
+            points = int(_num(cell("點數折現分攤")))
+            invoice_no = str(cell("發票號碼") or "").strip() or None
+
+            if order_id not in orders:
+                orders[order_id] = {
+                    "rcv_name": rcv_name, "rcv_phone": rcv_phone,
+                    "address": address, "family_no": family_no,
+                    "is_family": is_family, "is_cod": is_cod,
+                    "note": note, "freight": freight,
+                    "shopping_credit": 0,
+                    "shopping_credit_allocated": 0, "rows": [],
+                }
+            else:
+                if note and not orders[order_id]["note"]:
+                    orders[order_id]["note"] = note
+                if freight > 0:
+                    orders[order_id]["freight"] = freight
+
+            orders[order_id]["rows"].append({
+                "order_id": order_id, "rcv_name": rcv_name, "address": address,
+                "rcv_phone": rcv_phone, "invoice_no": invoice_no,
+                "sku": product.get("品號", raw_sku),
+                "name": product.get("品名", raw_name), "qty": output_qty,
+                "price": unit_price, "discount_offer": discount_offer,
+                "discount_amount": product_discount, "points": points,
+                "note": note, "invoice_date": invoice_date,
             })
+            orders[order_id]["shopping_credit"] += shopping_credit
+            orders[order_id]["shopping_credit_allocated"] += shopping_credit_share
+            success_count += 1
 
-        out_xlsx = _write_xlsx(self.output_dir.parent, self.source_type,
-                               date_obj, f"{mmdd}.xlsx", xlsx_rows)
-        out_csv  = _write_csv(self.output_dir.parent, self.source_type,
-                              date_obj, f"{mmdd}黑貓.csv", csv_orders, date_obj)
+        if not orders:
+            return ConversionResult(
+                source_type=self.source_type, fail_count=fail_count or len(errors),
+                order_date=order_date, errors=errors, status="failed",
+            )
 
-        status = "completed" if fail_count == 0 else ("partial" if success_count > 0 else "failed")
+        xlsx_rows: list[dict] = []
+        normal_orders: list[dict] = []
+        cod_orders: list[dict] = []
+        family_orders: list[dict] = []
+
+        for order_id, order in orders.items():
+            # 新版原檔已有每項購物金分攤，僅在未提供或有尾差時補足差額。
+            remaining_credit = max(
+                order["shopping_credit"] - order["shopping_credit_allocated"], 0
+            )
+            _allocate_shopping_credit(order["rows"], remaining_credit)
+            xlsx_rows.extend(order["rows"])
+            first = order["rows"][0]
+            if order["freight"] > 0:
+                xlsx_rows.append({
+                    "order_id": order_id, "rcv_name": order["rcv_name"],
+                    "address": order["address"], "rcv_phone": order["rcv_phone"],
+                    "invoice_no": first["invoice_no"], "sku": FREIGHT_SKU,
+                    "name": FREIGHT_NAME, "qty": 1, "price": order["freight"],
+                    "discount_offer": 0, "discount_amount": 0, "points": 0,
+                    "note": None, "invoice_date": invoice_date,
+                })
+            if order["is_cod"]:
+                xlsx_rows.append({
+                    "order_id": order_id, "rcv_name": order["rcv_name"],
+                    "address": order["address"], "rcv_phone": order["rcv_phone"],
+                    "invoice_no": first["invoice_no"], "sku": COD_FEE_SKU,
+                    "name": "黑貓貨到付款手續費", "qty": 1, "price": COD_FEE_PRICE,
+                    "discount_offer": 0, "discount_amount": 0, "points": 0,
+                    "note": None, "invoice_date": invoice_date,
+                })
+
+            subtotal = (
+                sum(r["qty"] * r["price"] for r in order["rows"])
+                + order["freight"]
+            )
+            discounts = sum(r["discount_amount"] + r["points"] for r in order["rows"])
+            shipping_order = {
+                "order_id": order_id, "rcv_name": order["rcv_name"],
+                "rcv_phone": order["rcv_phone"], "address": order["address"],
+                "family_no": order["family_no"], "note": order["note"],
+                "cod": int(round(subtotal - discounts + COD_FEE_PRICE)) if order["is_cod"] else "",
+            }
+            if order["is_family"]:
+                family_orders.append(shipping_order)
+            elif order["is_cod"]:
+                cod_orders.append(shipping_order)
+            else:
+                normal_orders.append(shipping_order)
+
+        output_files = [
+            _write_xlsx(self.output_dir.parent, self.source_type, date_obj,
+                        f"鼎新-樂齡{label}.xlsx", xlsx_rows),
+            _write_shipping_csv(self.output_dir.parent, self.source_type, date_obj,
+                                f"黑貓託運-樂齡{label}.csv", normal_orders,
+                                BLACKCAT_SENDER, "normal"),
+            _write_shipping_csv(self.output_dir.parent, self.source_type, date_obj,
+                                f"黑貓到付-樂齡{label}.csv", cod_orders,
+                                BLACKCAT_SENDER, "cod"),
+            _write_shipping_csv(self.output_dir.parent, self.source_type, date_obj,
+                                f"全家託運-樂齡{label}.csv", family_orders,
+                                FAMILY_SENDER, "family"),
+        ]
         return ConversionResult(
-            source_type   = self.source_type,
-            success_count = success_count,
-            fail_count    = fail_count,
-            order_date    = order_date,
-            output_files  = [out_xlsx, out_csv],
-            errors        = errors,
-            status        = status,
+            source_type=self.source_type, success_count=success_count,
+            fail_count=fail_count, order_date=order_date,
+            output_files=output_files, errors=errors,
+            status="completed" if fail_count == 0 else "partial",
         )
 
 
-# ── 輸出 ──────────────────────────────────────────────────────────────────
-
 def _write_xlsx(base_dir: Path, source_type: str, date_obj: datetime,
                 filename: str, rows: list[dict]) -> Path:
-    p = output_path(base_dir, source_type, date_obj, filename)
+    path = output_path(base_dir, source_type, date_obj, filename)
     wb = Workbook()
     ws = wb.active
     ws.title = "Sheet1"
     ws.append(OUTPUT_HEADER)
-    for r in rows:
+    for row in rows:
         ws.append([
-            r["order_id"], r["rcv_name"], r["address"], r["rcv_phone"],
-            None,
-            r["sku"], r["name"], r["qty"], r["price"],
-            0, r["discount"], 0,
-            None, None,
-            r["payment"],
+            row["order_id"], row["rcv_name"], row["address"], row["rcv_phone"],
+            row["invoice_no"], row["sku"], row["name"], row["qty"], row["price"],
+            row["discount_offer"], row["discount_amount"], row["points"],
+            row["note"], None, None, row["invoice_date"],
         ])
-    wb.save(p)
-    return p
+    wb.save(path)
+    return path
 
 
-def _write_csv(base_dir: Path, source_type: str, date_obj: datetime,
-               filename: str, orders: list[dict], ref_date: datetime) -> Path:
-    p = output_path(base_dir, source_type, date_obj, filename)
-    ship_date = ref_date.strftime("%Y/%m/%d")
-    next_date = (ref_date + timedelta(days=1)).strftime("%Y/%m/%d")
-    with open(p, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(CSV_HEADER)
-        for o in orders:
-            w.writerow([
-                o["rcv_name"], "", o["rcv_phone"], o["address"],
-                o["cod"], 1, 1, "",
-                o["order_id"],
-                SENDER["deliver"],
-                ship_date, next_date,
-                SENDER["temp"], SENDER["size"],
-                SENDER["name"], SENDER["tel"], SENDER["mobile"], SENDER["address"],
+def _write_shipping_csv(base_dir: Path, source_type: str, date_obj: datetime,
+                        filename: str, orders: list[dict], sender: dict,
+                        route: str) -> Path:
+    path = output_path(base_dir, source_type, date_obj, filename)
+    ship_date = date_obj.strftime("%Y/%m/%d")
+    next_date = (date_obj + timedelta(days=1)).strftime("%Y/%m/%d")
+    with open(path, "w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(CSV_HEADER)
+        for order in orders:
+            if route == "family":
+                address = order["family_no"]
+                remark = f"全家店號：{order['family_no']}"
+            else:
+                address = order["address"]
+                remark = order["note"] or 1
+            writer.writerow([
+                order["rcv_name"], "", order["rcv_phone"], address,
+                order["cod"] if route == "cod" else "", 1, 1, remark,
+                order["order_id"], sender["deliver"], ship_date, next_date,
+                sender["temp"], sender["size"], sender["name"], sender["tel"],
+                sender["mobile"], sender["address"],
                 "", "", "", "", "", "", "", "", "",
             ])
-    return p
+    return path
 
 
-# ── 工具 ─────────────────────────────────────────────────────────────────
-
-def _split(val) -> list[str]:
-    if val is None:
-        return []
-    return [s.strip() for s in str(val).split("\n") if s.strip()]
+def _date_label(stem: str, date_obj: datetime) -> str:
+    match = re.search(r"(\d{4}(?:-\d{4})?)", stem)
+    return match.group(1) if match else date_obj.strftime("%m%d")
 
 
-def _num(val) -> float:
+def _invoice_date_from_label(label: str, date_obj: datetime) -> str:
+    end = label.split("-")[-1]
+    if re.fullmatch(r"\d{4}", end):
+        return f"{date_obj.year}{end}"
+    return date_obj.strftime("%Y%m%d")
+
+
+def _parse_front_address(raw: str) -> str | None:
+    if not raw:
+        return None
+    value = re.sub(r"^台灣\s*", "", raw.strip())
+    value = re.sub(r"^\d{3,6}\s*", "", value)
+    value = value.replace(" ", "")
+    return value or None
+
+
+def _normalize_phone(raw: str) -> str:
+    value = re.sub(r"\s+", "", raw.strip())
+    if value.startswith("+886"):
+        value = "0" + value[4:]
+    elif value.startswith("886") and len(value) > 9:
+        value = "0" + value[3:]
+    return value[:10] if len(value) >= 10 else value
+
+
+def _num(value) -> float:
     try:
-        return float(str(val).strip())
+        return float(str(value).strip())
     except (ValueError, TypeError):
         return 0.0
 
 
-def _parse_address(raw: str) -> str:
-    """
-    解析多行地址：郵遞區號\\n城市 行政區\\n街道\\n姓名
-    僅保留「城市行政區 + 街道」。
-    """
-    if not raw:
-        return ""
-    lines = [l.strip() for l in raw.split("\n") if l.strip()]
-
-    # 英文地址直接保留（排除純數字郵遞區號開頭的中文地址）
-    if lines and re.match(r"^[A-Za-z]", lines[0]):
-        return " ".join(lines)
-
-    if len(lines) < 3:
-        return "".join(lines)
-
-    # line[0] = 郵遞區號（skip）；line[-1] = 姓名（skip）
-    city_line = lines[1]
-    street    = lines[2]
-
-    # 判斷順序：若第一個詞不含「市/縣」但第二個詞含「市/縣」→ 行政區在前 → 對調
-    parts = city_line.split()
-    if len(parts) >= 2 and re.search(r"[市縣]$", parts[1]) and not re.search(r"[市縣]", parts[0]):
-        city_dist = parts[1] + parts[0]
-    else:
-        city_dist = "".join(parts)
-
-    # 街道已含完整城市行政區 → 直接使用
-    if re.match(r"^.+[市縣].+[區鄉鎮市]", street):
-        return street
-
-    return city_dist + street
+def _allocate_shopping_credit(rows: list[dict], amount: int) -> None:
+    """依每項折扣後金額比例分攤訂單購物金，並確保整數合計不變。"""
+    if amount <= 0 or not rows:
+        return
+    weights = [max(0.0, row["qty"] * row["price"] - row["discount_amount"])
+               for row in rows]
+    total = sum(weights)
+    if total <= 0:
+        rows[0]["discount_amount"] += amount
+        return
+    exact = [amount * weight / total for weight in weights]
+    allocated = [math.floor(value + 0.5) for value in exact]
+    # 官網既有格式是各列四捨五入，尾差統一補到折扣後金額最大的商品。
+    allocated[max(range(len(rows)), key=lambda i: weights[i])] += amount - sum(allocated)
+    for row, share in zip(rows, allocated):
+        row["discount_amount"] += share

@@ -30,6 +30,16 @@ find output -type f -delete
 find archive -type f -delete
 ```
 
+## 樂齡網按摩搥贈品（2026/11/02 使用者指定）
+
+- 2026/11/05 使用者指定：之後訂單處理完成直接轉出並覆蓋原檔，不必再次詢問；先驗證完成檔再覆蓋。若原檔被開啟鎖定，請使用者關閉後重試。
+
+- 參考 `C:\Users\user\Desktop\轉訂單\樂齡信1102\鼎新-樂齡信1102.xlsx`。
+- 以 PO 訂單日期判斷，2026/10/29～2026/12/07（含首尾）每份組合贈按摩搥 1 支；同訂單兩份組合贈 2 支，各組合數量加總，不按客人限贈一支。
+- 鼎新檔在該訂單商品後新增贈品列：品號 `E52990008`、品名 `台灣製按摩搥`、單價 0、備註空白；訂單編號與收件資料沿用原訂單。不要重複新增已有的贈品。
+- 之後使用者提供同類樂齡網檔案，沿用本規則；黑貓託運單不另加贈品件數。
+- 2026/11/05 使用者最新更正：之後按摩搥贈品品號統一使用 `E52990008`，取代先前所有版本，優先於舊參考檔與品號資料。
+
 ## 系統架構
 
 - **Flask** 網頁應用，port 5099
@@ -45,7 +55,7 @@ find archive -type f -delete
 | shopee | 蝦皮 | Order.toship.*.xlsx（可加密） | UnifiedProduct |
 | a1baby | A1婦幼展 | MMDD.xlsx + MMDD-1.xlsx | UnifiedProduct |
 | leage | 樂齡網 | PDF | UnifiedProduct |
-| a1leage | A1樂齡官網 | *.xlsx（Orders 工作表） | UnifiedProduct |
+| a1leage | A1樂齡官網 | *.xlsx（Sales 工作表，與前台相同） | UnifiedProduct |
 | jjofficial | 捷捷官網 | *.xlsx（Sales 工作表） | UnifiedProduct |
 | yodee | 優迪通路 | *.xlsx（含標頭列「訂單編號」） | UnifiedProduct |
 

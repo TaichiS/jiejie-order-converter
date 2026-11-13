@@ -2,7 +2,7 @@
 converters/tuanma.py
 其他團媽訂單轉換器。
 輸入：後台匯出 xlsx（工作表 Sales）
-輸出：MMDD其他團媽黑貓.xlsx + MMDD其他團媽全家.xlsx（各 16 欄）
+輸出：鼎新-團媽黑貓MMDD.xlsx + 鼎新-團媽全家MMDD.xlsx（各 16 欄）
 
 轉換邏輯：
 - Sales 工作表；依「全家服務編號 / 7-11 店號」有無分拆黑貓／全家
@@ -193,6 +193,10 @@ class TuanmaConverter(BaseConverter):
                 fjsh = get(row, "全家服務編號 / 7-11 店號")
                 fjsh_val = str(fjsh).strip() if fjsh else ""
                 order_id  = str(get(row, "訂單號碼") or "")
+                note = _combine_notes(
+                    get(row, "訂單備註"),
+                    get(row, "出貨備註"),
+                )
 
                 out_row = (
                     get(row, "訂單號碼"),
@@ -208,7 +212,7 @@ class TuanmaConverter(BaseConverter):
                     0,   # 商品折扣金額
                     0,   # 加購折扣
                     0,   # 點數折現分攤
-                    get(row, "出貨備註") or "",
+                    note,
                     fjsh_val,  # 送貨編號（全家超商用）
                     "",  # 付款方式
                 )
@@ -239,7 +243,7 @@ class TuanmaConverter(BaseConverter):
                                 _normalize_address(get(row, "完整地址")),
                                 _normalize_phone(get(row, "收件人電話號碼")),
                                 get(row, "發票號碼"),
-                                get(row, "出貨備註") or "",
+                                note,
                                 fjsh_val,
                             ),
                         }
@@ -267,12 +271,12 @@ class TuanmaConverter(BaseConverter):
 
             if heikao_rows:
                 p = _write_xlsx(self.output_dir.parent, self.source_type,
-                                date_obj, f"{mmdd}其他團媽黑貓.xlsx", heikao_rows)
+                                date_obj, f"鼎新-團媽黑貓{mmdd}.xlsx", heikao_rows)
                 output_files.append(p)
 
             if jj_rows:
                 p = _write_xlsx(self.output_dir.parent, self.source_type,
-                                date_obj, f"{mmdd}其他團媽全家.xlsx", jj_rows)
+                                date_obj, f"鼎新-團媽全家{mmdd}.xlsx", jj_rows)
                 output_files.append(p)
 
         if not order_date:
@@ -300,3 +304,13 @@ def _write_xlsx(base_dir: Path, source_type: str, date_obj: datetime,
         ws.append(list(row))
     wb.save(p)
     return p
+
+
+def _combine_notes(*values) -> str:
+    """合併訂單備註與出貨備註，保留順序並去除重複內容。"""
+    notes: list[str] = []
+    for value in values:
+        note = str(value).strip() if value is not None else ""
+        if note and note not in notes:
+            notes.append(note)
+    return "；".join(notes)

@@ -125,7 +125,7 @@ start.bat
 | `shopee` | 蝦皮 | `Order.toship.*.xlsx`（可加密） | `UnifiedProduct` |
 | `a1baby` | A1 婦幼展 | `MMDD.xlsx` + `MMDD-1.xlsx` | `UnifiedProduct` |
 | `leage` | 樂齡網 | PDF | `UnifiedProduct` |
-| `a1leage` | A1 樂齡官網 | `*.xlsx`（Orders 工作表） | `UnifiedProduct` |
+| `a1leage` | A1 樂齡官網 | `*.xlsx`（Sales 工作表，與前台相同） | `UnifiedProduct` |
 | `jjofficial` | 捷捷官網 | `*.xlsx`（Sales 工作表） | `UnifiedProduct` |
 | `yodee` | 優迪通路 | `*.xlsx`（含標頭列「訂單編號」） | `UnifiedProduct` |
 | `kadomo` | 卡多摩 | 專用格式 | `卡多摩/通路資料.json` |

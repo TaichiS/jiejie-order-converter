@@ -2,7 +2,7 @@
 converters/jjofficial.py
 捷捷寶寶粥官網訂單轉換器。
 輸入：後台匯出 xlsx（工作表 Sales）
-輸出：MMDD黑貓.xlsx + MMDD全家.xlsx + MMDD黑貓托運單.csv
+輸出：鼎新-前台黑貓MMDD.xlsx + 鼎新-前台全家MMDD.xlsx + MMDD黑貓托運單.csv
 """
 from __future__ import annotations
 
@@ -139,6 +139,7 @@ class JJOfficialConverter(BaseConverter):
         # 依訂單號碼收集資料（保持原始順序）
         orders: dict[str, dict] = {}
         pending_discounts: dict[str, int] = {}   # 無品號列的折扣暫存（order_id → 累計折扣）
+        pending_promo_discounts: dict[str, int] = {}  # 無品號列中的商品優惠分攤
         errors: list[RowError]  = []
         success_count = 0
         fail_count    = 0
@@ -171,9 +172,11 @@ class JJOfficialConverter(BaseConverter):
             ship_note  = str(cell("出貨備註") or "").strip()
             note_parts = [n for n in [order_note, ship_note] if n]
             note       = "；".join(note_parts) or None
-            discount   = (int(_num(cell("商品折扣金額")))
-                          + int(_num(cell("商品折扣優惠")))
-                          + int(_num(cell("折抵購物金"))))
+            promo_discount = (int(_num(cell("商品折扣金額")))
+                              + int(_num(cell("商品折扣優惠"))))
+            shopping_discount = int(_num(cell("折抵購物金")))
+            discount = promo_discount + shopping_discount
+            order_discount = int(_num(cell("優惠折扣")))
             points     = int(_num(cell("點數折現分攤")))
             freight    = _num(cell("運費"))
             extra      = _num(cell("附加費"))
@@ -210,6 +213,9 @@ class JJOfficialConverter(BaseConverter):
                         pending_discounts[order_id] = (
                             pending_discounts.get(order_id, 0) + discount + points
                         )
+                        pending_promo_discounts[order_id] = (
+                            pending_promo_discounts.get(order_id, 0) + promo_discount
+                        )
                     continue
 
             # 初始化訂單容器
@@ -224,12 +230,15 @@ class JJOfficialConverter(BaseConverter):
                     "address":      address,
                     "invoice":      invoice,
                     "invoice_date": invoice_date,
+                    "order_discount": order_discount,
                 }
             else:
                 if freight > 0:
                     orders[order_id]["freight"] = freight
                 if extra > 0:
                     orders[order_id]["extra"] = extra
+                if order_discount != 0:
+                    orders[order_id]["order_discount"] = order_discount
 
             # 品號正規化：CODE_MAP → 去除零補位（2-01→2-1）→ 直接查 sku_map
             sku = CODE_MAP.get(raw_sku) or _depad_code(raw_sku, self._code_map) or raw_sku
@@ -239,6 +248,11 @@ class JJOfficialConverter(BaseConverter):
             item_name_for_qty = str(cell("商品名稱") or "").strip()
             m_qty = re.search(r"(\d+)\s*[份包]", item_name_for_qty)
             qty_multiplier = int(m_qty.group(1)) if m_qty and not is_addon else 1
+            # 一般商品的包數已由品號資料負責展開；若品名只是再次標示同一
+            # 包裝數（例如 D50200006 的「120g*2包」），不可再乘一次。
+            product_pack = int(_num(product.get("包數") or 0) or 0) if product else 0
+            if product_pack > 0 and qty_multiplier == product_pack:
+                qty_multiplier = 1
             input_qty = input_qty * qty_multiplier
 
             if is_addon:
@@ -298,6 +312,7 @@ class JJOfficialConverter(BaseConverter):
                 "qty":          output_qty,
                 "price":        unit_price,
                 "discount":     discount,
+                "promo_discount": promo_discount,
                 "addon_disc":   addon_disc,
                 "points":       points,
                 "note":         note,
@@ -316,9 +331,17 @@ class JJOfficialConverter(BaseConverter):
 
             # 同訂單折扣加總（放第一列，其餘為 0）
             # pending_discounts 收錄無品號列（折扣彙總列）的折扣
-            total_discount = sum(
+            allocated_discount = sum(
                 r["discount"] + r["addon_disc"] + r["points"] for r in item_rows
             ) + pending_discounts.get(order_id, 0)
+            allocated_promo = sum(
+                r["promo_discount"] for r in item_rows
+            ) + pending_promo_discounts.get(order_id, 0)
+            # 官網的「優惠折扣」是訂單層級彙總；部分訂單會另將同額折扣
+            # 分攤到各商品，部分則完全不分攤。只補足尚未分攤的差額，
+            # 其他購物金、點數與加購折扣仍會照常累加。
+            promo_shortfall = max(o.get("order_discount", 0) - allocated_promo, 0)
+            total_discount = allocated_discount + promo_shortfall
 
             # 同訂單備註合併（去重後以「；」連接）
             seen_notes: list[str] = []
@@ -398,9 +421,9 @@ class JJOfficialConverter(BaseConverter):
                 })
 
         out_black  = _write_xlsx(self.output_dir.parent, self.source_type,
-                                 date_obj, f"{mmdd}黑貓.xlsx", black_rows)
+                                 date_obj, f"鼎新-前台黑貓{mmdd}.xlsx", black_rows)
         out_family = _write_xlsx(self.output_dir.parent, self.source_type,
-                                 date_obj, f"{mmdd}全家.xlsx", family_rows)
+                                 date_obj, f"鼎新-前台全家{mmdd}.xlsx", family_rows)
         out_csv    = _write_csv(self.output_dir.parent, self.source_type,
                                 date_obj, f"{mmdd}黑貓托運單.csv", cat_orders, date_obj)
 

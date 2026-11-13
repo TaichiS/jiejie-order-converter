@@ -167,7 +167,13 @@ class BaseConverter(ABC):
                 if prod:
                     return prod, []
 
-        # 2b. 系列字母代碼（如 2-D 無序號），在同系列品項中取名稱最相近者
+        # 3. 精確品名必須優先於系列模糊比對。
+        # 例如「2-M寶貝義大利麵」本身是完整品名，不能被 2-M3 系列品項攔截。
+        prod = pool.get(q)
+        if prod:
+            return prod, []
+
+        # 3b. 系列字母代碼（如 2-D 無序號），在同系列品項中取名稱最相近者
         m2b = re.match(r'^(\d+-[A-Z])', q)
         if m2b:
             from difflib import SequenceMatcher
@@ -184,11 +190,6 @@ class BaseConverter(ABC):
                 best = max(series_prods,
                            key=lambda p: SequenceMatcher(None, q, p.get("品名", "")).ratio())
                 return best, []
-
-        # 3. 精確品名
-        prod = pool.get(q)
-        if prod:
-            return prod, []
 
         # 4. 候選清單：名稱相似 + 金額整除
         names      = list(pool.keys())
