@@ -269,6 +269,9 @@ def _extract_short_name(full_name: str) -> str:
     """
     # 移除品牌前綴 【xxx】
     name = re.sub(r"^【[^】]*】\s*", "", full_name)
+    # 部分蝦皮品名使用無括號品牌前綴，例如「捷捷樂齡食品 B05...」。
+    # 先移除品牌文字，讓後續 B04／B05 代碼可直接對照品號資料。
+    name = re.sub(r"^(?:捷捷樂齡食品|捷捷寶寶粥)\s*", "", name)
     # 取 | 之前的部分
     name = name.split("|")[0]
     # 移除所有空白
