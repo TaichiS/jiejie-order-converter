@@ -28,6 +28,15 @@ SENDER = {
     "deliver": "4",
 }
 
+# 樂齡採購單的廠商貨號 → 鼎新品號。
+SUPPLIER_SKU_ALIASES = {
+    "N1HF00003340000": "F30100063",
+    "N1HF00003350000": "F30100064",
+    "N1HF00003360000": "F30100065",
+    "N1HF00003370000": "F30100066",
+    "N1HF00003340999": "E52990008",
+}
+
 
 class LeageConverter(BaseConverter):
 
@@ -44,8 +53,11 @@ class LeageConverter(BaseConverter):
     def _process(self, input_files: list[Path]) -> ConversionResult:
         pdfs = sorted(f for f in input_files if f.suffix.lower() == ".pdf")
 
-        # 建立品名 → product 的模糊比對池
-        prod_names = list(self._product_map.keys())
+        sku_map = {
+            str(product.get("品號", "")).strip(): product
+            for product in self._product_map.values()
+            if str(product.get("品號", "")).strip()
+        }
 
         orders: list[dict]      = []
         errors: list[RowError]  = []
@@ -64,18 +76,29 @@ class LeageConverter(BaseConverter):
                                        source_file=pdf_path.name))
                 continue
 
-            # 品名比對
-            raw_name   = order["raw_product_name"]
-            norm_name  = _strip_prefix(raw_name)
-            product    = self._match_leage_product(norm_name, prod_names)
-            if not product:
-                errors.append(RowError(row_idx, "品名", raw_name,
-                                       f"品號資料中找不到「{norm_name}」",
-                                       source_file=pdf_path.name))
-                continue
+            matched_items = []
+            for item_no, item in enumerate(order["items"], start=1):
+                norm_name = _strip_prefix(item["raw_product_name"])
+                target_sku = SUPPLIER_SKU_ALIASES.get(item["supplier_sku"], "")
+                product = sku_map.get(target_sku) if target_sku else None
+                if not product:
+                    product = self._match_leage_product(norm_name)
+                if not product:
+                    errors.append(RowError(
+                        row_idx, f"品項{item_no}", item["raw_product_name"],
+                        f"品號資料中找不到「{norm_name}」",
+                        source_file=pdf_path.name,
+                    ))
+                    continue
+                matched_items.append({
+                    **item,
+                    "product": product,
+                    "prod_name": norm_name,
+                })
 
-            order["product"]   = product
-            order["prod_name"] = norm_name   # PDF 原始品名（去前綴）
+            if not matched_items:
+                continue
+            order["items"] = matched_items
             if not first_delivery_date:
                 first_delivery_date = order.get("delivery_date", "")
             orders.append(order)
@@ -129,8 +152,7 @@ class LeageConverter(BaseConverter):
             status        = status,
         )
 
-    def _match_leage_product(self, norm_name: str,
-                              prod_names: list[str]) -> dict | None:
+    def _match_leage_product(self, norm_name: str) -> dict | None:
         """
         精確比對或模糊比對樂齡網品名。
         只在樂齡品號（F30開頭）中比對。
@@ -176,26 +198,20 @@ def _parse_pdf(path: Path) -> dict | None:
     delivery_match = re.search(r"預計交貨日[：:]\s*(\d{4}/\d{2}/\d{2})", text)
     delivery_date  = delivery_match.group(1) if delivery_match else ""
 
-    # 品名（捷捷樂齡食品-...）
-    prod_match = re.search(r"捷捷樂齡食品-([^\n]+)", text)
-    raw_product = ("捷捷樂齡食品-" + prod_match.group(1).strip()) if prod_match else ""
-
-    # 採購量（品名行下方的數字，或從含稅總額推算）
-    qty = _extract_qty(text, raw_product)
+    items = _extract_items(text)
 
     # 備註（格式：郵遞區號地址/姓名/手機）
     remark_match = re.search(r"備註[:：]\s*(.+)", text)
     remark = remark_match.group(1).strip() if remark_match else ""
     address, name, phone = _parse_remark(remark)
 
-    if not (po_clean and delivery_date and raw_product and address):
+    if not (po_clean and delivery_date and items and address):
         return None
 
     return {
         "po_number":         po_clean,
         "delivery_date":     delivery_date,
-        "raw_product_name":  raw_product,
-        "qty":               qty,
+        "items":              items,
         "address":           address,
         "name":              name,
         "phone":             phone,
@@ -207,26 +223,28 @@ def _strip_prefix(raw_name: str) -> str:
     return re.sub(r"^捷捷樂齡食品-", "", raw_name).strip()
 
 
-def _extract_qty(text: str, product_line: str) -> int:
-    """
-    從 PDF 文字擷取採購量。
-    尋找品名行附近的數字，或解析 "採購量" 欄位。
-    """
-    # 嘗試在品名行下方找到數字
-    prod_name_short = _strip_prefix(product_line)
-    pattern = re.escape(prod_name_short[:8]) + r".*?(\d+)"
-    m = re.search(pattern, text, re.DOTALL)
-    if m:
-        return int(m.group(1))
-    # fallback: 找緊鄰的行
-    for line in text.split("\n"):
-        if prod_name_short[:6] in line:
-            nums = re.findall(r"\b(\d+)\b", line)
-            for n in nums:
-                v = int(n)
-                if 1 <= v <= 100:
-                    return v
-    return 1
+def _extract_items(text: str) -> list[dict]:
+    """逐列擷取品項貨號、品名與該品項自己的採購量。"""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    items: list[dict] = []
+    row_pattern = re.compile(
+        r"^(\d+)\s+(N1HF\d+)\s+(N1HF\d+)\s+(\d+(?:\.\d+)?)\s+\S+\s+"
+        r"[\d,]+(?:\.\d+)?\s+[\d,]+(?:\.\d+)?(?:\s+[\d,]+(?:\.\d+)?)?$"
+    )
+    for index, line in enumerate(lines):
+        match = row_pattern.match(line)
+        if not match or index + 1 >= len(lines):
+            continue
+        name = lines[index + 1]
+        # 下一行應為品名，不能是另一筆品項或結算列。
+        if row_pattern.match(name) or re.match(r"^(稅金|含稅總額|備註)\b", name):
+            continue
+        items.append({
+            "supplier_sku": match.group(2),
+            "raw_product_name": name,
+            "qty": int(float(match.group(4))),
+        })
+    return items
 
 
 def _parse_remark(remark: str) -> tuple[str, str, str]:
@@ -272,18 +290,19 @@ def _save_leage_xlsx(base_dir: Path, source_type: str, date_obj: datetime,
     ws.append(["訂單編號", "收件人", "地址", "電話",
                "產品編號", "產品名稱", "數量", "單價", "備註"])
     for order in orders:
-        prod = order["product"]
-        ws.append([
-            order["order_id"],
-            order["name"],
-            order["address"],
-            order["phone"],
-            prod["品號"],
-            order["prod_name"],
-            order["qty"],
-            int(float(prod.get("商品結帳價") or 0)),
-            order["po_number"],
-        ])
+        for item in order["items"]:
+            prod = item["product"]
+            ws.append([
+                order["order_id"],
+                order["name"],
+                order["address"],
+                order["phone"],
+                prod["品號"],
+                item["prod_name"],
+                item["qty"],
+                int(float(prod.get("商品結帳價") or 0)),
+                order["po_number"],
+            ])
     wb.save(p)
     return p
 
@@ -318,7 +337,7 @@ def _save_leage_csv(base_dir: Path, source_type: str, date_obj: datetime,
                 phone_raw,          # 收件人手機
                 order["address"],
                 "",                 # 代收金額
-                order["qty"],       # 件數
+                1,                  # 每張採購單固定一件託運，不跟商品數量連動
                 1,                  # 品名
                 1,                  # 備註
                 order["order_id"],
