@@ -28,6 +28,11 @@ echo  啟動完成後瀏覽器會自動開啟。
 echo  請勿關閉此視窗，關閉即停止系統。
 echo.
 
+rem 關閉仍占用 5099 的舊版程序，避免重新開啟後其實仍使用舊程式。
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5099 " ^| findstr "LISTENING"') do (
+    taskkill /PID %%a /F >nul 2>&1
+)
+
 start /min cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:5099"
 
 uv run python main.py
