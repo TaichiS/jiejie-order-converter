@@ -228,7 +228,7 @@ def _extract_items(text: str) -> list[dict]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     items: list[dict] = []
     row_pattern = re.compile(
-        r"^(\d+)\s+(N1HF\d+)\s+(N1HF\d+)\s+(\d+(?:\.\d+)?)\s+\S+\s+"
+        r"^(\d+)\s+(N1HF\d+)\s+(N1HF\d+)\s+(\d+(?:\.\d+)?)\s*\S+\s+"
         r"[\d,]+(?:\.\d+)?\s+[\d,]+(?:\.\d+)?(?:\s+[\d,]+(?:\.\d+)?)?$"
     )
     for index, line in enumerate(lines):
